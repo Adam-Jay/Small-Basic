@@ -33,7 +33,7 @@ GraphicsWindow.Width = windowWidth
 GraphicsWindow.Height = windowHeight
 GraphicsWindow.Left = windowLeft
 GraphicsWindow.Top = windowTop
-GraphicsWindow.Title = "Adam Foye's A-maze-ing maze!"
+GraphicsWindow.Title = "Adam Jay's A-maze-ing maze!"
 GraphicsWindow.CanResize = "false"
 
 '------------------
