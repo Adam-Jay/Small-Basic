@@ -1,0 +1,701 @@
+'==============================================================================
+'Town Game.sb
+'Adam Jay
+'Build your own town! Right click to upgrade the tile, middle click to sell it.
+'Left click locks your selection on the tile you're hovering over.
+'==============================================================================
+
+'Hide window until ready
+  GraphicsWindow.Hide()
+
+'Events
+  looped = 0
+  GraphicsWindow.MouseDown = onMouseDown
+
+'Load in assets
+  directory = Program.Directory + "\Assets\"
+  wallpaper1 = directory + "wallpaper1.jpg"
+  wallpaper1Width = 1920
+  wallpaper1Height = 1200
+
+'Initialize varibles
+  winWidth = 960
+  winHeight = 720
+  bottomGuiHeight = 168
+
+  menuEnd = 0
+  fps = 60
+  realDelay = (1 / fps) * 1000
+  highlightFadeSpeed = 20
+
+'Set up graphics window
+  GraphicsWindow.Title = "Town Game"
+  GraphicsWindow.CanResize = "false"
+
+  GraphicsWindow.Width = winWidth
+  GraphicsWindow.Height = winHeight
+  GraphicsWindow.Top = (Desktop.Height / 2.5) - (winHeight / 2)
+  GraphicsWindow.Left = (Desktop.Width / 2.5) - (winWidth / 2)
+
+  GraphicsWindow.BackgroundColor = "black"
+
+'Load images and shapes
+  'Wallpaper
+    wallpaper1Shape = Shapes.AddImage(wallpaper1)
+    wallpaper1ZoomX = winWidth / wallpaper1Width
+    wallpaper1ZoomY = winHeight / wallpaper1Height
+    wallpaper1ShapeX = 0
+    wallpaper1ShapeY = 0
+    Shapes.Zoom(wallpaper1Shape, wallpaper1ZoomX, wallpaper1ZoomY)
+    Shapes.Move(wallpaper1Shape, wallpaper1ShapeX, wallpaper1ShapeY)
+
+  'White background
+    whiteBgOpacity = 0
+    GraphicsWindow.BrushColor = "white"
+    GraphicsWindow.PenWidth = 0
+    whiteBg = Shapes.AddRectangle(winWidth, winHeight)
+    Shapes.SetOpacity(whiteBg, whiteBgOpacity)
+
+  'Title
+    GraphicsWindow.FontName = "Tahoma"
+    GraphicsWindow.FontSize = 66
+    GraphicsWindow.BrushColor = "white"
+
+    gameTitle = Shapes.AddText("Town Game")
+    Shapes.Move(gameTitle, 150, 100)
+
+  'Click to begin
+    GraphicsWindow.FontSize = 25
+    titleDirections = Shapes.AddText("Click to begin!")
+    titleDirectionsX = 154
+    titleDirectionsY = 180
+    Shapes.Move(titleDirections, titleDirectionsX, titleDirectionsY)
+
+  'Tutorial
+    GraphicsWindow.FontSize = 15
+    tutorialText = Shapes.AddText("This is the tutorial. There's nothing here now. ")
+    Shapes.SetOpacity(tutorialText, 0)
+
+  'Bottom GUI
+    bottomGuiOpacity = 0
+    GraphicsWindow.BrushColor = "black"
+    bottomGui = Shapes.AddRectangle(winWidth, bottomGuiHeight)
+    Shapes.Move(bottomGui, 0, winHeight - bottomGuiHeight)
+    Shapes.SetOpacity(bottomGui, bottomGuiOpacity)
+
+  'Tile files
+    testTile1 = directory + "testTile1.png"
+    testTile2 = directory + "testTile2.png"
+    testTile3 = directory + "testTile3.png"
+    grassTile = directory + "grassTile.jpg"
+    bushTile = directory + "bushTile.png"
+    homeTile = directory + "homeTile.png"
+    treeTile = directory + "treeTile.png"
+    mansionTile = directory + "mansionTile.png"
+    mansionTileOrigin = directory + "mansionTileOrigin.jpg"
+    mansionImage = directory + "mansionImage.png"
+    castleTile = directory + "castleTile.png"
+    castleTileOrigin = directory + "castleTileOrigin.jpg"
+    castleImage = directory + "castleImage.png"
+
+  'Hover box
+    hoverBoxPic = directory + "highlightBox.png"
+    hoverBox = Shapes.AddImage(hoverBoxPic)
+    Shapes.SetOpacity(hoverBox, 0)
+
+  'Temp info text
+    GraphicsWindow.FontSize = 18
+    GraphicsWindow.BrushColor = "white"
+    selectedText = Shapes.AddText(" ")
+    selectedTextOpacity = 0
+    Shapes.SetOpacity(selectedText, selectedTextOpacity)
+    Shapes.Move(selectedText, 10, winHeight - GraphicsWindow.FontSize - 73)
+
+  'Money text
+    GraphicsWindow.FontSize = 36
+    GraphicsWindow.BrushColor = "white"
+    moneyText = Shapes.AddText(" ")
+    moneyTextOpacity = 0
+    moneyTextX = 10
+    moneyTextY = winHeight - bottomGuiHeight
+    Shapes.SetOpacity(moneyText, moneyTextOpacity)
+    Shapes.Move(moneyText, moneyTextX, moneyTextY)
+
+  'Upgrade money text
+    GraphicsWindow.FontSize = 24
+    GraphicsWindow.BrushColor = "white"
+    upgradeText = Shapes.AddText(" ")
+    upgradeTextOpacity = 0
+    Shapes.SetOpacity(upgradeText, upgradeTextOpacity)
+    Shapes.Move(upgradeText, 10, winHeight - bottomGuiHeight + 46)
+
+  'Whiteflash
+    GraphicsWindow.BrushColor = "black"
+    GraphicsWindow.PenColor = "black"
+    whiteFlash = Shapes.AddRectangle(winWidth, winHeight)
+    whiteFlashOpacity = 0
+    Shapes.SetOpacity(whiteFlash, whiteFlashOpacity)
+
+'Show the graphics window
+  GraphicsWindow.Show()
+
+'Show console
+  console = 0
+  If console = 1 Then
+    TextWindow.Hide()
+    TextWindow.Left = GraphicsWindow.Left + winWidth + 10
+    TextWindow.Top = GraphicsWindow.Top - 5
+    TextWindow.Title = GraphicsWindow.Title + " Console"
+    TextWindow.Show()
+  EndIf
+
+'Wait for click
+  While menuEnd = 0
+    If Mouse.IsLeftButtonDown Then
+      menuEnd = 1
+    EndIf
+  EndWhile
+
+'Fade away
+  i = 0
+  iInterval = 0.01
+  While i < 1
+    i = i + iInterval
+
+    wallpaper1ShapeX = wallpaper1ShapeX - iInterval * 800
+    wallpaper1ShapeY = wallpaper1ShapeY - iInterval * 650
+
+    titleDirectionsX = titleDirectionsX + 1
+
+    'Wallpaper
+      Shapes.Zoom(wallpaper1Shape, wallpaper1ZoomX + i, wallpaper1ZoomY + i)
+      Shapes.Move(wallpaper1Shape, wallpaper1ShapeX, wallpaper1ShapeY)
+      Shapes.SetOpacity(wallpaper1Shape, 100 - i * 100)
+
+    'Text
+      Shapes.SetOpacity(gameTitle, 100 - i * 100)
+      Shapes.SetOpacity(titleDirections, 100 - i * 100)
+      Shapes.Move(titleDirections, titleDirectionsX, titleDirectionsY)
+
+    Program.Delay(realDelay)
+  EndWhile
+
+'Show tutorial
+  Program.Delay(0.5 * 1000)
+  Shapes.SetOpacity(tutorialText, 100)
+  Program.Delay(0 * 1000)
+  Shapes.SetOpacity(tutorialText, 0)
+
+'Prep in-game
+  'Buildvars
+    buildVars()
+    Sub buildVars
+      buildSpotsX = 9
+      buildSpotsY = 5
+      totalBuildSpots = buildSpotsX * buildSpotsY
+      buildSize = 100
+      buildStart["x"] = (winWidth - buildSpotsX * buildSize) / 2
+      buildStart["y"] = winHeight - bottomGuiHeight - buildSize * buildSpotsY - penWidth / 2 + 1
+    EndSub
+
+  'Variables
+    money = 30
+    penWidth = 0
+    profitsValues()
+    upgradeValues()
+
+    'Town array
+      For xReps = 0 To buildSpotsX - 1
+        For yReps = 0 To buildSpotsY - 1
+        randomNum = Math.Round(Math.GetRandomNumber(1))
+          If randomNum = 1 Then
+            build[xReps][yReps] = grassTile
+          ElseIf randomNum = 2 Then
+              build[xReps][yReps] = bushTile
+          ElseIf randomNum = 3 Then
+              build[xReps][yReps] = homeTile
+          ElseIf randomNum = 4 Then
+            build[xReps][yReps] = treeTile
+          EndIf
+        EndFor
+      EndFor
+      revenueCheck()
+
+  'Fade in
+    fadeLegnth = 20
+    For i = 0 To fadeLegnth
+      whiteBgOpacity = whiteBgOpacity + 100 / fadeLegnth
+      bottomGuiOpacity = bottomGuiOpacity + 100 / fadeLegnth
+      selectedTextOpacity = selectedTextOpacity + 100 / fadeLegnth
+      moneyTextOpacity = moneyTextOpacity + 100 / fadeLegnth
+      upgradeTextOpacity = upgradeTextOpacity + 100 / fadeLegnth
+
+      Shapes.SetOpacity(bottomGui, bottomGuiOpacity)
+      Shapes.SetOpacity(whiteBg, whiteBgOpacity)
+      Shapes.SetOpacity(selectedText, selectedTextOpacity)
+      Shapes.SetOpacity(moneyText, moneyTextOpacity)
+      Shapes.SetOpacity(upgradeText, upgradeTextOpacity)
+
+      Program.Delay(realDelay)
+    EndFor
+
+    GraphicsWindow.BackgroundColor = "#383838"
+
+    'Draw grid
+      drawGrid()
+      Sub drawGrid
+
+        GraphicsWindow.BrushColor = GraphicsWindow.BackgroundColor
+        GraphicsWindow.FillRectangle(0, 0, winWidth, winHeight)
+
+        GraphicsWindow.PenWidth = penWidth
+        GraphicsWindow.PenColor = "black"
+        GraphicsWindow.BrushColor = "black"
+
+        'Paint grass and grid
+        For xReps = 0 To buildSpotsX - 1
+          For yReps = 0 To buildSpotsY - 1
+            GraphicsWindow.FillRectangle(buildStart["x"] + xReps * buildSize, buildStart["y"] + yReps * buildSize, buildSize, buildSize)
+            GraphicsWindow.DrawRectangle(buildStart["x"] + xReps * buildSize, buildStart["y"] + yReps * buildSize, buildSize, buildSize)
+            GraphicsWindow.DrawImage(grassTile, buildStart["x"] + xReps * buildSize, buildStart["y"] + yReps * buildSize)
+          EndFor
+        EndFor
+
+        For xReps = 0 To buildSpotsX - 1
+          For yReps = 0 To buildSpotsY - 1
+            'Paint images
+            If build[xReps][yReps] <> grassTile Then
+              If build[xReps][yReps] = homeTile Then
+                GraphicsWindow.DrawImage(build[xReps][yReps], buildStart["x"] + xReps * buildSize - 28, buildStart["y"] + yReps * buildSize - 42)
+              ElseIf build[xReps][yReps] = treeTile Then
+                GraphicsWindow.DrawImage(build[xReps][yReps], buildStart["x"] + xReps * buildSize - 29, buildStart["y"] + yReps * buildSize - 52)
+              Else
+                GraphicsWindow.DrawImage(build[xReps][yReps], buildStart["x"] + xReps * buildSize, buildStart["y"] + yReps * buildSize)
+              EndIf
+              If build[xReps][yReps] = mansionTileOrigin Then
+                GraphicsWindow.DrawImage(mansionImage, buildStart["x"] + xReps * buildSize, buildStart["y"] + yReps * buildSize)
+              EndIf
+              If build[xReps][yReps] = castleTileOrigin Then
+                GraphicsWindow.DrawImage(castleImage, buildStart["x"] + xReps * buildSize - 15, buildStart["y"] + yReps * buildSize - 22)
+              EndIf
+            EndIf
+          EndFor
+        EndFor
+      EndSub
+
+    whiteBgOpacity = 0
+    Shapes.SetOpacity(whiteBg, whiteBgOpacity)
+
+'Loop varibles
+  clicked = 0
+  looped = 1
+  buildTitle = " "
+  shouldDrawGrid = 0
+  hoveredOverMap = 0
+  ticks = 0
+  moneyFramesInterval = fps
+  Shapes.SetText(moneyText, "Money: $" + money)
+  Shapes.SetText(upgradeText, "Cost to upgrade: ")
+  upgradeCost = 0
+  homesAmount = 0
+  castlesAmount = 0
+
+'==============================|
+'In-game loop
+  While "true"
+'==============================|
+
+'Hovered-over tile
+  'Snap to grid
+    If clicked = 0 Then
+        'Makes sure that the user's mouse is actually in the grid
+        If GraphicsWindow.MouseX >= buildStart["x"] And GraphicsWindow.MouseY >= buildStart["y"] And GraphicsWindow.MouseX <= buildStart["x"] + buildSpotsX * buildSize And GraphicsWindow.MouseY <= winHeight - bottomGuiHeight Then
+
+          hoveredOverMap = 1
+
+          'This whole part is the snap to grid code: xShift and yShift are the coordinates for where the grid starts, and buildSize is the size of each square of the grid
+          xShift = buildStart["x"]
+          yShift = buildStart["y"]
+
+          'Centers the box around the mouse (since origin is technically top left, but we want it to be in the middle here)
+          trueX = GraphicsWindow.MouseX - buildSize / 2
+          trueY = GraphicsWindow.MouseY - buildSize / 2
+
+          'The actual rounding
+          roundX = Math.Round((trueX - xShift) / buildSize) * buildSize + xShift
+          roundY = Math.Round((trueY - yShift) / buildSize) * buildSize + yShift
+
+          Shapes.Move(hoverBox, roundX, roundY)
+
+          If roundY >= winHeight - bottomGuiHeight - buildSize / 4 Then
+            Shapes.SetOpacity(hoverBox, Shapes.GetOpacity(hoverBox) - highlightFadeSpeed)
+            Shapes.Move(hoverBox, roundX, roundY - buildSize)
+          Else
+            Shapes.SetOpacity(hoverBox, Shapes.GetOpacity(hoverBox) + highlightFadeSpeed)
+          EndIf
+        Else
+          Shapes.SetOpacity(hoverBox, Shapes.GetOpacity(hoverBox) - highlightFadeSpeed)
+          hoveredOverMap = 0
+        EndIf
+    Else
+      'Flicker and stay put if the hover box is locked (when clicked <> 0 )
+      Shapes.SetOpacity(hoverBox, Math.Abs(Clock.Millisecond / 10 - 50) + 30)
+    EndIf
+
+  'Find what's selected
+    For xReps = 0 To buildSpotsX - 1
+      For yReps = 0 To buildSpotsY - 1
+
+        'Finds the approximate x and y of the scanning
+        tempX = buildStart["x"] + xReps * buildSize
+        tempY = buildStart["y"] + yReps * buildSize
+
+        tempX = Math.Round((tempX - xShift) / buildSize) * buildSize + xShift
+        tempY = Math.Round((tempY - yShift) / buildSize) * buildSize + yShift
+
+        'Filter text
+        buildTitle = build[xReps][yReps]
+
+          If buildTitle = grassTile Then
+            buildTitle = "Grass"
+          ElseIf buildTitle = bushTile Then
+            buildTitle = "Bush"
+          ElseIf buildTitle = treeTile Then
+            buildTitle = "Tree"
+          ElseIf buildTitle = homeTile Then
+            buildTitle = "House"
+          ElseIf buildTitle = mansionTile Or buildTitle = mansionTileOrigin Then
+            buildTitle = "Mansion"
+          ElseIf buildTitle = castleTile Or buildTitle = castleTileOrigin Then
+            buildTitle = "Castle"
+          EndIf
+
+        'If the x and y of the scan match the x and y of the cursor's highlight box, then it means that THIS is what is being hovered over
+        If tempX = roundX And tempY = roundY Then
+          Shapes.SetText(selectedText, buildTitle)
+          selectedTile["x"] = xReps
+          selectedTile["y"] = yReps
+          hoveredOverTile = build[xReps][yReps]
+        EndIf
+      EndFor
+    EndFor
+
+    'Fade out if the map isn't being hovered over
+    If hoveredOverMap = 0 Then
+      selectedTextOpacity = selectedTextOpacity - 25
+      If selectedTextOpacity <= 0 Then
+        selectedTextOpacity = 0
+      EndIf
+    Else
+      selectedTextOpacity = selectedTextOpacity + 25
+      If selectedTextOpacity >= 100 Then
+        selectedTextOpacity = 100
+      EndIf
+    EndIf
+    upgradeTextOpacity = selectedTextOpacity
+    Shapes.SetOpacity(upgradeText, upgradeTextOpacity)
+    Shapes.SetOpacity(selectedText, selectedTextOpacity)
+
+'Update?
+  If shouldDrawGrid = 1 Then
+    whiteFlashOpacity = 100
+    shouldDrawGrid = 2
+    scanForMultiblock()
+    revenueCheck()
+  ElseIf shouldDrawGrid = 2 Then
+    drawGrid()
+    shouldDrawGrid = 0
+  EndIf
+
+  Shapes.SetOpacity(whiteFlash, whiteFlashOpacity)
+  whiteFlashOpacity = whiteFlashOpacity - 8
+
+'Handle money
+  If ticks = moneyFramesInterval Then
+    money = money + (revenue[grassTile] * profit[grassTile] + revenue[bushTile] * profit[bushTile] + revenue[treeTile] * profit[treeTile] + revenue[homeTile] * profit[homeTile] + revenue[mansionTileOrigin] * profit[mansionTileOrigin] + revenue[castleTileOrigin] * profit[castleTileOrigin]) / (fps / moneyFramesInterval)
+    Shapes.SetText(moneyText, "Money: $" + Math.Floor(money))
+    ticks = 0
+  EndIf
+
+'Cost to upgrade
+  upgradeCost = upgrade[hoveredOverTile]
+  Shapes.SetText(upgradeText, "Cost to upgrade: " + upgradeCost)
+
+'Console
+  If console = 1 Then
+    TextWindow.Clear()
+    'TextWindow.WriteLine(hoveredOverMap)
+    'TextWindow.WriteLine(selectedTextOpacity)
+    'TextWindow.WriteLine("Hovered over: " + hoveredOverTile)
+    'TextWindow.WriteLine("Total build spots: " + totalBuildSpots)
+    'TextWindow.Write(revenue[grassTile])
+    'TextWindow.WriteLine(upgrade[grassTile])
+    'TextWindow.WriteLine(profit[grassTile])
+    TextWindow.WriteLine("homesAmount " + homesAmount)
+    TextWindow.WriteLine("castlesAmount " + castlesAmount)
+  EndIf
+
+'Money text shake
+  If moneyTextX <> 10 Then
+    Shapes.Move(moneyText, moneyTextX, moneyTextY)
+    moneyTextX = moneyTextX + (10 - moneyTextX) / 10
+  EndIf
+
+'End Loop
+  Program.Delay(realDelay)
+  ticks = ticks + 1
+
+'==============================|
+  EndWhile
+'==============================|
+
+'End program
+  Program.End()
+
+'==============================|
+'Subscripts
+'==============================|
+
+Sub onMouseDown
+  If looped = 1 Then
+
+    'Left click
+    If Mouse.IsLeftButtonDown Then
+        'This is for freezing the tile cursor
+        If clicked = 0 Then
+          clicked = 1
+        Else
+          clicked = 0
+        EndIf
+      EndIf
+
+  'Middle clicked  - destroy stuff
+    If Mouse.IsLeftButtonDown Or Mouse.IsRightButtonDown Then
+    Else
+      tileID = build[selectedTile["x"]][selectedTile["y"]]
+      If tileID <> grassTile Then
+        destroyedTile = tileID
+        build[selectedTile["x"]][selectedTile["y"]] = grassTile
+
+        'Home destroyed = decrease number by 1
+        If tileID = homeTile Then
+          homesAmount = homesAmount - 1
+          If homesAmount < 0 Then
+            homesAmount = 0
+          EndIf
+        EndIf
+
+        'Mansion destroyed on origin, simply erase it (also decrease homes amount by FOUR since that's how many the mansion is really made of)
+        If tileID = mansionTileOrigin Then
+          build[selectedTile["x"] + 1][selectedTile["y"]] = grassTile
+          build[selectedTile["x"]][selectedTile["y"] + 1] = grassTile
+          build[selectedTile["x"] + 1][selectedTile["y"] + 1] = grassTile
+          homesAmount = homesAmount - 4
+        EndIf
+
+        'Mansion NOT origin is middle clicked
+        If tileID = mansionTile Then
+          If build[selectedTile["x"] - 1][selectedTile["y"]] = mansionTileOrigin Then
+            selectedTile["x"] = selectedTile["x"] - 1
+          ElseIf build[selectedTile["x"]][selectedTile["y"] - 1] = mansionTileOrigin Then
+            selectedTile["y"] = selectedTile["y"] - 1
+          Else
+            selectedTile["y"] = selectedTile["y"] - 1
+            selectedTile["x"] = selectedTile["x"] - 1
+          EndIf
+
+          build[selectedTile["x"]][selectedTile["y"]] = grassTile
+          build[selectedTile["x"] + 1][selectedTile["y"]] = grassTile
+          build[selectedTile["x"]][selectedTile["y"] + 1] = grassTile
+          build[selectedTile["x"] + 1][selectedTile["y"] + 1] = grassTile
+          homesAmount = homesAmount - 4
+
+        EndIf
+
+        'Castle origin middle click = simply destroy it and the castle tiles next to it
+        If tileID = castleTileOrigin Then
+          build[selectedTile["x"]][selectedTile["y"]] = grassTile
+          build[selectedTile["x"] + 1][selectedTile["y"]] = grassTile
+          build[selectedTile["x"]][selectedTile["y"] + 1] = grassTile
+          build[selectedTile["x"] + 1][selectedTile["y"] + 1] = grassTile
+          homesAmount = homesAmount - 4
+          castlesAmount = castlesAmount - 1
+        EndIf
+
+        'Castle middle click but NOT origin requires it to find out where it is relative to the origin, then adjust
+        If tileID = castleTile Then
+          If build[selectedTile["x"] - 1][selectedTile["y"]] = castleTileOrigin Then
+            selectedTile["x"] = selectedTile["x"] - 1
+          ElseIf build[selectedTile["x"]][selectedTile["y"] - 1] = castleTileOrigin Then
+            selectedTile["y"] = selectedTile["y"] - 1
+          Else
+            selectedTile["y"] = selectedTile["y"] - 1
+            selectedTile["x"] = selectedTile["x"] - 1
+          EndIf
+
+          build[selectedTile["x"]][selectedTile["y"]] = grassTile
+          build[selectedTile["x"] + 1][selectedTile["y"]] = grassTile
+          build[selectedTile["x"]][selectedTile["y"] + 1] = grassTile
+          build[selectedTile["x"] + 1][selectedTile["y"] + 1] = grassTile
+
+          homesAmount = homesAmount - 4
+          castlesAmount = castlesAmount - 1
+        EndIf
+
+        shouldDrawGrid = 1
+
+        'Refund money
+          refundPercent = 50
+          If destroyedTile = bushTile Then
+            money = money + upgrade[grassTile] * (1 / (100 / refundPercent))
+          ElseIf destroyedTile = treeTile Then
+            money = money + (upgrade[grassTile] + upgrade[bushTile]) * (1 / (100 / refundPercent))
+          ElseIf destroyedTile = homeTile Then
+            money = money + (upgrade[grassTile] + upgrade[bushTile] + upgrade[treeTile] - upgradeBase[treeTile] / 2) * (1 / (100 / refundPercent))
+          ElseIf destroyedTile = mansionTile Or destroyedTile = mansionTileOrigin Then
+            money = money + (upgrade[grassTile] + upgrade[bushTile] + (upgrade[treeTile] - upgradeBase[treeTile] / 2) * 4) * (1 / (100 / refundPercent))
+          ElseIf destroyedTile = castleTile Or destroyedTile = castleTileOrigin Then
+            money = money + (upgrade[grassTile] + upgrade[bushTile] + (upgrade[treeTile] - upgradeBase[treeTile] / 2) * 4 + upgradeBase[mansionTile]) * (1 / (100 / refundPercent))
+          EndIf
+
+          Shapes.SetText(moneyText, "Money: $" + Math.Floor(money))
+      EndIf
+    EndIf
+
+  'Right click: Upgrade tile
+    If Mouse.IsRightButtonDown And hoveredOverMap = 1 Then
+      If money >= upgradeCost Then
+        tileID = build[selectedTile["x"]][selectedTile["y"]]
+
+        'Makes sure that the thing actually CAN be upgraded
+        If upgradeCost <> "N/A" Then
+          money = money - upgradeCost
+          Shapes.SetText(moneyText, "Money: $" + Math.Floor(money))
+        EndIf
+
+        'Simple tiles: grass to bush and bush to tree
+        If tileID = grassTile Then
+          changeToWhat = bushTile
+        ElseIf tileID = bushTile Then
+          changeToWhat = treeTile
+
+        'Mansion  upgrading to castle
+        ElseIf tileID = mansionTile Or tileID = mansionTileOrigin Then
+
+          shouldDrawGrid = 1
+
+          'If the selection isn't at the ORIGIN of the mansion, then make it
+          If tileID <> mansionTileOrigin Then
+            If build[selectedTile["x"] - 1][selectedTile["y"]] = mansionTileOrigin Then
+              selectedTile["x"] = selectedTile["x"] - 1
+            ElseIf build[selectedTile["x"]][selectedTile["y"] - 1] = mansionTileOrigin Then
+              selectedTile["y"] = selectedTile["y"] - 1
+            Else
+              selectedTile["y"] = selectedTile["y"] - 1
+              selectedTile["x"] = selectedTile["x"] - 1
+            EndIf
+          EndIf
+
+          'Change to the castle and increase the variable to count castles
+          build[selectedTile["x"]][selectedTile["y"]] = castleTileOrigin
+          build[selectedTile["x"] + 1][selectedTile["y"]] = castleTile
+          build[selectedTile["x"]][selectedTile["y"] + 1] = castleTile
+          build[selectedTile["x"] + 1][selectedTile["y"] + 1] = castleTile
+          castlesAmount = castlesAmount + 1
+
+        Else
+          changeToWhat = homeTile
+          If tileID <> homeTile Then
+            homesAmount = homesAmount + 1
+          EndIf
+        EndIf
+
+        'If it's normal conditions, then simply change the current tile to the next tile, and use shouldDrawGrid to initiate a screen refresh
+        If (build[selectedTile["x"]][selectedTile["y"]] <> changeToWhat) And (tileID <> mansionTile And tileID <> mansionTileOrigin) And (tileID <> castleTile And tileID <> castleTileOrigin) Then
+          build[selectedTile["x"]][selectedTile["y"]] = changeToWhat
+          shouldDrawGrid = 1
+        EndIf
+
+      'If there's not enough money to upgrade
+      ElseIf money < upgradeCost Then
+        moneyTextX = moneyTextX + 50
+      EndIf
+
+    'Endif relates to the "If Mouse.IsRightButtonDown And hoveredOverMap = 1 Then"
+    EndIf
+
+  'Endif relates to the "If looped = 1 Then"
+  EndIf
+EndSub
+
+'Scans for a block of houses in order to turn it into a mansion
+  Sub scanForMultiblock
+    For xReps = 0 To buildSpotsX - 2
+      For yReps = 0 To buildSpotsY - 2
+
+          'Checks to see if the current tile and the ones next to it are candidates for upgrade
+          If build[xReps][yReps] = homeTile And build[xReps + 1][yReps] = homeTile And build[xReps][yReps + 1] = homeTile And build[xReps + 1][yReps + 1] = homeTile Then
+
+            'Turns the new house and the surrounding houses into mansion tiles
+              build[xReps][yReps] = mansionTileOrigin
+              build[xReps + 1][yReps] = mansionTile
+              build[xReps][yReps + 1] = mansionTile
+              build[xReps + 1][yReps + 1] = mansionTile
+          EndIf
+      EndFor
+    EndFor
+  EndSub
+
+'Scans for what makes money
+  Sub revenueCheck
+
+    'Clear the previous arrays
+      revenue[grassTile] = 0
+      revenue[bushTile] = 0
+      revenue[treeTile] = 0
+      revenue[homeTile] = 0
+      revenue[mansionTile] = 0
+      revenue[mansionTileOrigin] = 0
+      revenue[castleTile] = 0
+      revenue[castleTileOrigin] = 0
+
+    'Go through every position, and tally the numbers of each tile
+    For xReps = 0 To buildSpotsX - 1
+      For yReps = 0 To buildSpotsY - 1
+        revenue[build[xReps][yReps]] = revenue[build[xReps][yReps]] + 1
+      EndFor
+    EndFor
+
+    'Tally the new upgrade costs (for ones that exponentially grow when there's more)
+      upgrade[treeTile] = Math.Round(upgradeBase[treeTile] * (Math.Power(costMultiplier, homesAmount)))
+      upgrade[mansionTile] = Math.Round(upgradeBase[mansionTile] * (Math.Power(castleCostMultiplier, castlesAmount)))
+      upgrade[mansionTileOrigin] = upgrade[mansionTile]
+  EndSub
+
+'Revenues from each type of tile
+  Sub profitsValues
+    profit[grassTile] = 0.01
+    profit[bushTile] = 0.25
+    profit[treeTile] = 1
+    profit[homeTile] = 5
+    profit[mansionTile] = 25
+    profit[mansionTileOrigin] = 25
+    profit[castleTile] = 50
+    profit[castleTileOrigin] = 50
+  EndSub
+
+'Costs to upgrade each type
+  Sub upgradeValues
+    costMultiplier = 1.11
+    castleCostMultiplier = 1.8
+    upgrade[grassTile] = 15
+    upgrade[bushTile] = 60
+    upgradeBase[treeTile] = 300
+    upgrade[treeTile] = upgradeBase[treeTile]
+    upgrade[homeTile] = "N/A"
+    upgradeBase[mansionTile] = 1500
+    upgrade[mansionTile] = upgradeBase[mansionTile]
+    upgrade[mansionTileOrigin] = upgradeBase[mansionTile]
+    upgrade[castleTile] = "N/A"
+    upgrade[castleTileOrigin] = "N/A"
+  EndSub
