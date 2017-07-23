@@ -1,0 +1,371 @@
+'====================================
+'Verlet.sb
+'Adam Jay
+'Simulates a rope. Use the mouse to drag it around! 
+'====================================
+
+'------------------
+'Set up window
+'------------------
+GraphicsWindow.Hide()
+TextWindow.Hide()
+wWidth = 700 
+wHeight = 700 
+GraphicsWindow.Width = wWidth
+GraphicsWindow.Height = wHeight
+GraphicsWindow.Left = Desktop.Width / 2 - wWidth / 1.5
+GraphicsWindow.Top = Desktop.Height / 2 - wHeight / 1.5
+GraphicsWindow.Title = "Verlet"
+GraphicsWindow.CanResize = "false" 
+
+'------------
+'Variables
+'------------
+ropeThickness = 5
+
+grabbed = 0 
+
+showConsole = 0 
+showVars = 0 
+showArrays = 0 
+
+'Constants
+gravity = 0.5 
+friction = 1
+pinnedFriction = 1.1 
+roundingPlace = 1000
+minX = 0.014 
+
+fps = 80 
+realDelay = (1 / fps) * 1000
+
+diameter = 0
+radius = diameter / 2 
+objectsAmount = 15
+linkLegnth = 250 / objectsAmount 
+constraintReps = 3
+
+mouseRange = 25 
+mouseWeight = 0.5 
+
+'--------------------------------------
+'Set up distancesInRange array
+'--------------------------------------
+For i = 0 To objectsAmount
+  distancesInRange[i] = 99999   
+EndFor 
+
+'-----------------
+'Create objects
+'-----------------
+'Mouse range indicator
+GraphicsWindow.PenColor = "#1f9140"
+GraphicsWindow.BrushColor = GraphicsWindow.PenColor
+
+mouseDisplay = Shapes.AddEllipse(mouseRange, mouseRange) 
+Shapes.SetOpacity(mouseDisplay, 0) 
+
+'Make the points
+GraphicsWindow.PenColor = "black" 
+GraphicsWindow.BrushColor = GraphicsWindow.PenColor 
+
+pinnedPoint = 0 
+pinned["x"] = wWidth / 2.1 
+pinned["y"] = wHeight - (objectsAmount * linkLegnth) * 1.8 
+
+For i = 0 To objectsAmount - 1 
+  a[i]["id"] = Shapes.AddEllipse(diameter, diameter)
+  
+  a[i]["x"] = (((wWidth - pinned["x"]) / objectsAmount) * i) / 2 + pinned["x"] 
+  a[i]["y"] = pinned["y"] 
+  Shapes.Move(a[i]["id"], a[i]["x"], a[i]["y"]) 
+  
+  a[i]["oldX"] = a[i]["x"] 
+  a[i]["oldY"] = a[i]["y"] 
+EndFor
+
+'----------------------
+'Create constraints
+'----------------------
+constraintsAmount = objectsAmount - 1 
+For i = 0 To constraintsAmount - 1 
+  link[i]["point"] = a[i]["id"]
+  If i < constraintsAmount Then 
+    link[i]["connectedTo"] = a[i + 1]["id"]
+  EndIf   
+EndFor
+
+'Write constraints array
+If showArrays = 1 Then 
+  TextWindow.WriteLine("Array.GetItemCount(link): " + Array.GetItemCount(link)) 
+  TextWindow.WriteLine("") 
+
+  For i = 0 To Array.GetItemCount(link) - 1 
+    TextWindow.WriteLine("link[" + i + "][point]: " + link[i]["point"])
+    TextWindow.WriteLine("link[" + i + "][connectedTo]: " + link[i]["connectedTo"])
+  EndFor 
+EndIf 
+
+'------------------
+'Show program
+'------------------
+GraphicsWindow.Show()
+
+If showConsole = 1 Then 
+  TextWindow.Left = GraphicsWindow.Left + wWidth + 10
+  TextWindow.Top = GraphicsWindow.Top - 4 
+  TextWindow.Show()
+EndIf 
+
+'=======
+'Main loop
+While "true"
+'==========
+
+'Does this for every point
+For i = 0 To objectsAmount - 1 
+  '--------------
+  'Boundaries
+  '-------------- 
+  'Floor 
+  If a[i]["y"] > wHeight - diameter Then
+    a[i]["y"] = wHeight - diameter 
+    If a[i]["velY"] > 0 Then 
+      a[i]["velY"] = a[i]["velY"] * -1 
+    EndIf 
+  EndIf 
+  
+  'Ceiling 
+  If a[i]["y"] < 0 Then
+    a[i]["y"] = 0 
+    If a[i]["velY"] < 0 Then 
+      a[i]["velY"] = a[i]["velY"] * -1 
+    EndIf 
+  EndIf     
+  
+  '-------
+  'Walls
+  '-------
+  'Left wall 
+  If a[i]["x"] < 0 Then
+    a[i]["x"] = 0 
+    If a[i]["velX"] < 0 Then 
+      a[i]["velX"] = a[i]["velX"] * -1 
+    EndIf 
+  EndIf         
+  
+  'Right wall
+  If a[i]["x"] > wWidth - diameter Then
+    a[i]["x"] = wWidth - diameter 
+    If a[i]["velX"] > 0 Then 
+      a[i]["velX"] = a[i]["velX"] * -1 
+    EndIf 
+  EndIf 
+  
+  '-------
+  'Verlet
+  '-------
+  'Calculate change in position 
+  If pinnedPoint <> i Then
+    a[i]["velX"] = (a[i]["x"] - a[i]["oldX"]) / friction 
+    a[i]["velY"] = a[i]["y"] - a[i]["oldY"] + gravity 
+  Else 
+    a[i]["velX"] = (a[i]["x"] - a[i]["oldX"]) / pinnedFriction 
+    a[i]["velY"] = (a[i]["y"] - a[i]["oldY"]) / pinnedFriction 
+  EndIf 
+  
+  'Round velX and apply min velocity
+  a[i]["velX"] = (1 / roundingPlace) * Math.Round(roundingPlace * a[i]["velX"])
+  If Math.Abs(a[i]["velX"]) <= minX Then 
+    a[i]["velX"] = 0
+  EndIf 
+  
+  'Calculate next position
+  a[i]["nextX"] = a[i]["x"] + a[i]["velX"] 
+  a[i]["nextY"] = a[i]["y"] + a[i]["velY"] 
+  
+  'Store old position
+  a[i]["oldX"] = a[i]["x"] 
+  a[i]["oldY"] = a[i]["y"] 
+  
+  'Move to new position
+  a[i]["x"] = a[i]["nextX"]
+  a[i]["y"] = a[i]["nextY"]
+  Shapes.Move(a[i]["id"], a[i]["nextX"], a[i]["nextY"])
+EndFor 
+
+'--------------
+'Constraints
+'--------------
+For e = 1 To constraintReps 
+  'Load constraint points and calculate changes
+  For i = 0 To constraintsAmount
+    'Load points - this might not be used 
+    link[i]["x"] = a[i]["x"]
+    link[i]["y"] = a[i]["y"]
+    
+    link[i]["connectedX"] = a[i + 1]["x"]
+    link[i]["connectedY"] = a[i + 1]["y"]
+    
+    'Find differences
+    differenceX = a[i]["x"] - a[i + 1]["x"]
+    differenceY = a[i]["y"] - a[i + 1]["y"]
+    
+    '=== I do not understand this math ===
+    distance = Math.SquareRoot(Math.Power(differenceX, 2) + Math.Power(differenceY, 2))
+    newDifference = (linkLegnth - distance) / distance
+    
+    'Actually move
+    If i <> constraintsAmount Then 
+      translationX = differenceX * newDifference * 0.5 
+      translationY = differenceY * newDifference * 0.5
+      
+      a[i]["x"] = a[i]["x"] + translationX
+      a[i]["y"] = a[i]["y"] + translationY
+      
+      a[i + 1]["x"] = a[i + 1]["x"] - translationX
+      a[i + 1]["y"] = a[i + 1]["y"] - translationY 
+    Else 
+      translationX = differenceX * newDifference * 0.5 
+      translationY = differenceY * newDifference * 0.5
+      
+      a[i]["x"] = a[i]["x"] + translationX
+      a[i]["y"] = a[i]["y"] + translationY
+      
+      a[i + 1]["x"] = a[i + 1]["x"] - translationX * 2
+      a[i + 1]["y"] = a[i + 1]["y"] - translationY * 2
+    EndIf 
+      
+  EndFor 
+EndFor  
+
+'The last point on the rope requires some different code
+i = objectsAmount - 1
+differenceX = a[i]["x"] - a[i - 1]["x"]
+differenceY = a[i]["y"] - a[i - 1]["y"]
+distance = Math.SquareRoot(Math.Power(differenceX, 2) + Math.Power(differenceY, 2))
+
+newDifference = (linkLegnth - distance) / distance
+
+translationX = differenceX * newDifference * 0.5 
+translationY = differenceY * newDifference * 0.5
+
+a[i]["x"] = a[i]["x"] + translationX
+a[i]["y"] = a[i]["y"] + translationY
+
+a[i + 1]["x"] = a[i - 1]["x"] - translationX
+a[i + 1]["y"] = a[i - 1]["y"] - translationY 
+
+'--------
+'Mouse
+'--------
+mouseX = GraphicsWindow.MouseX
+mouseY = GraphicsWindow.MouseY 
+
+'Move indicator to show where mouse range is 
+mouseXAdjusted = mouseX - mouseRange / 2
+mouseYAdjusted = mouseY - mouseRange / 2
+Shapes.Move(mouseDisplay, mouseXAdjusted, mouseYAdjusted)
+
+'Calculates what gets grabbed
+If Mouse.IsLeftButtonDown And grabbed = 0 Then 
+  For i = 0 To objectsAmount - 1
+    'Finds where the mouse would be grabbing
+    xCentered = a[i]["x"] + radius
+    yCentered = a[i]["y"] + radius
+    
+    'Finds the distances and stores the ones that are within range of the mouse 
+    distances[i] = Math.SquareRoot(Math.Power(xCentered - mouseX, 2) + Math.Power(yCentered - mouseY, 2))  
+    If distances[i] < mouseRange Then 
+      distancesInRange[i] = distances[i] 
+    EndIf 
+  EndFor 
+  
+  'Sorts through the acceptable values to find the closest one
+  smallestDistance = 9999
+  For i = 0 To Array.GetItemCount(distancesInRange) - 1
+    If distancesInRange[i] < smallestDistance And distancesInRange[i] < mouseRange Then 
+      smallestDistance = distancesInRange[i]
+      grabbedID = i 
+      grabbed = 1 
+    EndIf 
+  EndFor 
+EndIf 
+
+If grabbed = 1 Then 
+  If Mouse.IsLeftButtonDown Then 
+    mouseMoveX = mouseX - radius
+    mouseMoveY = mouseY - radius 
+    a[grabbedID]["x"] = (a[grabbedID]["x"] * (1 - mouseWeight) + mouseMoveX * mouseWeight)
+    a[grabbedID]["y"] = (a[grabbedID]["y"] * (1 - mouseWeight) + mouseMoveY * mouseWeight) 
+  Else
+    grabbed = 0 
+  EndIf 
+EndIf 
+
+'----------------------
+'Keep pinned point
+'----------------------
+a[pinnedPoint]["x"] = pinned["x"] 
+a[pinnedPoint]["y"] = pinned["y"] 
+
+'---------------------
+'Draw constraints
+'---------------------
+GraphicsWindow.BrushColor = "white" 
+GraphicsWindow.FillRectangle(0, 0, wWidth, wHeight) 
+
+GraphicsWindow.PenWidth = ropeThickness
+For i = 0 To constraintsAmount - 1
+  GraphicsWindow.DrawLine(a[i]["x"] + radius, a[i]["y"] + radius, link[i]["connectedX"] + radius, link[i]["connectedY"] + radius) 
+EndFor 
+
+'---------
+'Console 
+'---------
+If showVars = 1 Then 
+  TextWindow.Clear()
+  TextWindow.WriteLine("velX: " + a[0]["velX"]) 
+  TextWindow.WriteLine("velY: " + a[0]["velY"]) 
+  TextWindow.WriteLine("oldX: " + a[0]["oldX"]) 
+  TextWindow.WriteLine("oldY: " + a[0]["oldY"]) 
+  TextWindow.WriteLine("x: " + a[0]["x"]) 
+  TextWindow.WriteLine("y: " + a[0]["y"]) 
+  TextWindow.WriteLine("nextX: " + a[0]["nextX"]) 
+  TextWindow.WriteLine("nextY: " + a[0]["nextY"]) 
+  TextWindow.WriteLine("") 
+  TextWindow.WriteLine("grabbed: " + grabbed) 
+  TextWindow.WriteLine("grabbedID: " + grabbedID) 
+EndIf 
+
+'------------------
+'Clean up array
+'------------------
+arrayLegnth = Array.GetItemCount(distancesInRange)
+
+'Write array
+If showArrays = 1 Then 
+  TextWindow.WriteLine("") 
+  TextWindow.WriteLine("arrayLegnth: " + (arrayLegnth - 1)) 
+  
+  TextWindow.WriteLine("")  
+  For i = 0 To Array.GetItemCount(distances) - 1  
+    TextWindow.WriteLine("distances[" + i + "]: " + distances[i]) 
+  EndFor 
+
+  TextWindow.WriteLine("")
+  For i = 0 To arrayLegnth - 1 
+    TextWindow.WriteLine("distancesInRange[" + i + "]: " + distancesInRange[i]) 
+  EndFor 
+EndIf 
+
+'Clear array
+For i = 0 To arrayLegnth - 1
+  distancesInRange[i] = 99999 
+EndFor 
+
+'========
+'End of loop
+Program.Delay(realDelay)
+EndWhile 
+'====================
