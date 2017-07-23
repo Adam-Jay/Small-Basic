@@ -1,0 +1,231 @@
+'-------------------
+'Sets up window
+'-------------------
+GraphicsWindow.Hide()
+wWidth = 500 
+wHeight = 300 
+wLeft = 500 
+wTop = 500
+fps = 60 
+realDelay = (1 / fps) * 1000 
+GraphicsWindow.Width = wWidth
+GraphicsWindow.Height = wHeight
+GraphicsWindow.Left = wLeft
+GraphicsWindow.Top = wTop
+GraphicsWindow.Title = "Water"
+GraphicsWindow.CanResize = "false" 
+
+'---------------------
+'Mouse properties
+'---------------------
+GraphicsWindow.MouseDown = onMouseDown  'The clicked subroutine
+clicked = 0                             'Determines if mouse has been clicked or not
+mouseBasePower = 20                     'How strongly a single click effects the wave
+mousePower = mouseBasePower             'Used to actually apply the click to the wave
+
+'--------------------
+'Water variables
+'--------------------
+waterColor = "blue" 'Color of water
+drawWaterSimple = 0 'Boolean: 0 means draw just the surface (should always be 0)
+waterPoints = 25    'Number of water points
+pointDiameter = 6   'Size of point
+pointRadius = pointDiameter / 2 'Radius of point (used for calculating center position) 
+
+waterLevel = wHeight / 2  'Resting water level
+yVelMax = 25              'Fastest the point can move from mouse
+randomization = 0         'Randomizes the starting positions of the points   
+
+ambientWaves = 0          'Turns on ambient waves
+sinTick = 0               'Used for generating waves
+
+'Constants
+pointMass = 1           'Mass of the point
+springConstant = 0.025  'How much tension the spring has
+dampening = 0.04        'How much to pull the point against its movement (slowing it down)
+rippleSpread = 0.1      '(0 - 0.5): How quickly the ripple spreads
+springiness = springConstant / pointMass  'Calculates how heavy the spring is based on both tension and mass
+
+'--------------------------------------
+'Set up distancesInRange array
+'--------------------------------------
+For i = 0 To waterPoints
+  'Sets the default distance as aburdly far away so that the preset values don't interfere with calculated values
+  distances[i] = 99999   
+EndFor 
+
+'----------------------
+'Creates the points
+'----------------------
+'Sets color of points
+GraphicsWindow.PenColor = waterColor  
+GraphicsWindow.BrushColor = waterColor
+
+'Initializes the array
+For i = 0 To waterPoints 
+  'Position indeces - assigns a starting position to x and y
+  w[i]["x"] = ((wWidth - pointDiameter) / waterPoints) * i 
+  w[i]["y"] = waterLevel + Math.GetRandomNumber(randomization) - randomization / 2
+  
+  'Velocity and acceleration
+  w[i]["yVel"] = 0
+  w[i]["yAccel"] = 0
+EndFor 
+
+'------------------
+'Shows window
+'------------------
+GraphicsWindow.Show()
+
+'=======
+'Main loop
+While "true"
+'========== 
+'--------------------------------------
+'Calculate and apply movement
+'--------------------------------------
+'Goes through all points...
+For i = 0 To waterPoints
+  distance = w[i]["y"] - waterLevel 'Finds the difference between the resting position and the current position
+  w[i]["yAccel"] = -1 * springiness * distance - w[i]["yVel"] * dampening 'Uses hooke's law - the water acts like a flowing spring... 
+                                                                          'F (force) = -k (spring constant) * x (distance)... subtracting it by dampening makes it slow down
+                                                                          
+  w[i]["y"] = w[i]["y"] + w[i]["yVel"]          'Position = position + velocity
+  w[i]["yVel"] = w[i]["yVel"] + w[i]["yAccel"]  'Velocity = velocity + acceleration
+EndFor 
+
+'----------------------
+'Spread the ripples
+'----------------------
+'Changes based on points to the right
+For i = 0 To waterPoints - 1
+  ripple[i]["right"] = rippleSpread * (w[i]["y"] - w[i + 1]["y"])   
+EndFor 
+
+'Changes based on points to the left
+For i = 1 To waterPoints 
+  ripple[i]["left"] = rippleSpread * (w[i]["y"] - w[i - 1]["y"])   
+EndFor 
+
+'---------------------
+'Apply the ripples
+'---------------------
+'Note: The ripples work by first calculating all the differences to the right, then all the differences to the left
+'Then, these differences are applied to the right or left, hence the [i - 1]["right"] and [i + 1]["left"]
+'For example, the point 10 is effected by point 9's "right" value since it's on its right, and point 11's "left" value
+
+'First point 
+w[0]["yVel"] = w[0]["yVel"] + ripple[1]["left"]  
+
+'Normal points
+For i = 1 To waterPoints - 1
+  w[i]["yVel"] = w[i]["yVel"] + ripple[i - 1]["right"] + ripple[i + 1]["left"]
+EndFor 
+
+'Last point
+w[waterPoints]["yVel"] = w[waterPoints]["yVel"] + ripple[waterPoints - 1]["right"]
+  
+'---------------
+'Mouse input
+'---------------
+If clicked = 1 Then
+  'Stores mouse position
+  mouseX = GraphicsWindow.MouseX
+  mouseY = GraphicsWindow.MouseY
+  
+  'Calculates all distances from points to mouse
+  For i = 0 To waterPoints
+    xCentered = w[i]["x"] + pointRadius
+    yCentered = w[i]["y"] + pointRadius
+    
+    distances[i] = Math.SquareRoot(Math.Power(mouseX - xCentered, 2) + Math.Power(mouseY - yCentered, 2))
+  EndFor   
+
+  'Sorts through values to find the closet one
+  smallestDistance = 9999
+  For i = 0 To waterPoints
+    If distances[i] < smallestDistance Then 
+      smallestDistance = distances[i]
+      clickedID = i 
+    EndIf 
+  EndFor 
+  
+  'Apply the click
+  'Changes the splash direction based on if the mouse is above or below the water
+  If mouseY < waterLevel Then 
+    mousePower = mouseBasePower
+  Else
+    mousePower = mouseBasePower * -1 
+  EndIf   
+  
+  'Moves the main point completely and the surronding two points by half
+  w[clickedID - 1]["yVel"] = w[clickedID - 1]["yVel"] + mousePower / 2
+  w[clickedID]["yVel"] = w[clickedID]["yVel"] + mousePower
+  w[clickedID + 1]["yVel"] = w[clickedID + 1]["yVel"] + mousePower / 2
+  
+  'Declare the end of the mouse code
+  clicked = 0   
+EndIf 
+
+'-------------------
+'Ambient waves
+'-------------------
+'NOTE: This is WIP
+If ambientWaves = 1 Then 
+  w[0]["yVel"] = w[0]["yVel"] * 0.5 + Math.Sin(sinTick)
+  w[waterPoints / 2]["yVel"] = w[waterPoints / 2]["yVel"] * 0.5 + Math.Sin(sinTick * 10) * 0.5 
+  w[waterPoints]["yVel"] = w[waterPoints]["yVel"] * 0.5 + Math.Sin(sinTick * 10)
+  sinTick = sinTick + 1
+EndIf 
+
+'----------------
+'Draws water
+'----------------
+'Clears the screen
+GraphicsWindow.BrushColor = GraphicsWindow.BackgroundColor 
+GraphicsWindow.FillRectangle(0, 0, wWidth, wHeight) 
+GraphicsWindow.BrushColor = waterColor
+
+'Draw just the surface of the water
+If drawWaterSimple = 0 Then 
+  For i = 0 To waterPoints
+    If i <> waterPoints Then 
+      drawWaterSurface()
+    EndIf 
+  EndFor  
+ 
+'Draw the whole water 
+Else 
+  For i = 0 To waterPoints
+    If i <> waterPoints Then 
+      drawWaterComplex()
+    EndIf 
+  EndFor     
+EndIf 
+
+'======
+'End loop
+Program.Delay(realDelay) 
+EndWhile
+'====================
+
+'---------------------------------------
+'Subroutine: mouse clicked event
+'---------------------------------------
+Sub onMouseDown 
+  If Mouse.IsLeftButtonDown Then 
+    clicked = 1
+  EndIf 
+EndSub 
+
+'----------------------------------
+'Subroutine: draw the water
+'----------------------------------
+Sub drawWaterComplex
+  GraphicsWindow.FillTriangle(w[i]["x"] + pointRadius, w[i]["y"] + pointRadius, w[i + 1]["x"] + pointRadius, w[i + 1]["y"] + pointRadius, w[i]["x"] + pointRadius, wHeight) 
+  GraphicsWindow.FillTriangle(w[i + 1]["x"] + pointRadius, w[i + 1]["y"] + pointRadius, w[i]["x"] + pointRadius, wHeight, w[i + 1]["x"] + pointRadius, wHeight) 
+EndSub 
+
+Sub drawWaterSurface 
+  GraphicsWindow.DrawLine(w[i]["x"] + pointRadius, w[i]["y"] + pointRadius, w[i + 1]["x"] + pointRadius, w[i + 1]["y"] + pointRadius)
+EndSub 
