@@ -1,0 +1,597 @@
+'================================================================================================================================================
+'BB-8.sb
+'Adam Jay
+'Has a BB-8 with a space background on the moon, bouncing, jumping around, rolling and making cute noises. You can play with him using the mouse!
+'================================================================================================================================================
+
+'Hide window at first - this is so that the graphics window can prepare BEFORE showing
+GraphicsWindow.Hide()
+
+'Prepare program properties
+directory = Program.Directory + "\Assets"
+fps = 70
+realDelay = (1 / fps) * 1000
+showConsole = 0
+
+'---------------------
+'Prepare windows
+'---------------------
+'Graphics window properties
+wHeight = 900
+wWidth = 1000
+GraphicsWindow.CanResize = "false"
+GraphicsWindow.Height = wHeight
+GraphicsWindow.Width = wWidth
+GraphicsWindow.Top = 5
+GraphicsWindow.Left = 5
+GraphicsWindow.Title = "Ball Animation: 'May the 4th be with you!' - Adam Jay"
+
+'Prepare console - used for testing variables but is normally turned off
+TextWindow.Hide()
+If showConsole = 1 Then
+  TextWindow.Title = GraphicsWindow.Title + " - Console"
+  TextWindow.Top = GraphicsWindow.Top - 4
+  TextWindow.Left = GraphicsWindow.Left + wWidth + 10
+EndIf
+
+'----------------
+'Load sounds
+'----------------
+'Bouncing sound
+shouldBounceSound = 1
+boingSound = directory + "\boingSound.mp3"
+
+'Moving around noises
+bb8Sound1 = directory + "\bb8Sound1.mp3"
+bb8Sound2 = directory + "\bb8Sound2.mp3"
+bb8Sound3 = directory + "\bb8Sound3.mp3"
+
+'Noises made when thrown by mouse
+bb8Sound4 = directory + "\bb8Sound4.mp3"
+bb8Sound5 = directory + "\bb8Sound5.mp3"
+bb8Sound6 = directory + "\bb8Sound6.mp3"
+
+'------------------
+'Ball properties
+'------------------
+'Load ball images
+ballImage1 = directory + "\ball.png"      'Beach ball
+ballImage2 = directory + "\bb8Body.png"   'BB-8 ball
+bb8HeadImage = directory + "\bb8Head.png" 'BB-8 head
+
+'**********************************************************
+'Which ball to use: 0 is blank default, 1 is beach ball, 2 is BB-8
+ballImageUsed = 2
+'**********************************************************
+
+'Ball size
+originalDiameter = 40
+
+If ballImageUsed = 1 Then
+  diameter = 100
+ElseIf ballImageUsed = 2 Then
+  diameter = 125
+Else
+  diameter = originalDiameter
+EndIf
+
+radius = diameter / 2
+
+'How the ball moves
+gravity = 0.004 * diameter
+friction = 1 + (diameter / 2600)
+
+'Starting position and speeds
+ballX = 100
+ballY = 100
+xVel = 30
+yVel = -10
+
+'Minimum and maximum speeds
+minX = 0.13
+maxX = 100
+maxY = 100
+
+'How the ball bounces
+baseDecay = 1.5
+bounceDecay = baseDecay + ((diameter / 200) - 0.1)  'Small balls are bouncy, large balls are heavy
+bouncePrecision = diameter / 400                    'Keeps the ball off screen by moving it this many units; Large balls require larger increments.
+
+'Zoom - How the ball stretches based on its velocity
+zoomFactor = diameter / 2
+zoomCap = 1.4
+zoomMin = 0.8
+
+zoomX = 1
+zoomY = 1
+lastZoomX = zoomX
+lastZoomY = zoomY
+newZoomX = zoomX
+newZoomY = zoomY
+
+'Ball angles
+ballCanTurn = 1
+ballAngle = 0
+
+'---------------------------------------
+'Wall, ceiling, and floor thickness
+'---------------------------------------
+'Defaults
+floorHeight = 0
+ceilingHeight = 0
+wallWidth = 0
+
+'Change if neccesary
+If ballImageUsed = 1 Then
+  floorHeight = 40
+ElseIf ballImageUsed = 2 Then
+  floorHeight = 80
+EndIf
+
+'---------------------
+'Mouse properties
+'---------------------
+useMouse = 1
+
+mouseRange = radius
+dragSpeed = 1.5     'How hard to follow the mouse
+dragPower = 1       'How hard to be thrown
+
+grabbed = 0
+mouseRelativeX = 0
+mouseRelativeY = 0
+
+'----------------------
+'Draw background
+'----------------------
+If ballImageUsed = 2 Then
+  'Load images
+  backgroundImage = directory + "\starryNight.jpg"
+  floorImage = directory + "\moonFloor.png"
+
+  'Draw images
+  GraphicsWindow.DrawImage(backgroundImage, 0, 0)
+  GraphicsWindow.DrawImage(floorImage, 0, 0)
+ElseIf ballImageUsed = 1 Then
+  GraphicsWindow.BackgroundColor = "#f2e6c4"
+Else
+  GraphicsWindow.BackgroundColor = "#dee5e0"
+EndIf
+
+'------------------
+'Draw info text
+'------------------
+infoTextImage = directory + "\instructionsText.png"
+infoTextOpacity = 100
+infoText = Shapes.AddImage(infoTextImage)
+Shapes.Move(infoText, 10, 150)
+
+'-------------
+'Create ball
+'-------------
+'Get image used
+If ballImageUsed = 1 Then
+  imageUsed = ballImage1
+ElseIf ballImageUsed = 2 Then
+  imageUsed = ballImage2
+Else
+  imageUsed = 0
+EndIf
+
+'Use images if supplied, otherwise create default ball
+If imageUsed <> 0 Then
+  ball = Shapes.AddImage(imageUsed)
+Else
+  GraphicsWindow.PenColor = "black"
+  GraphicsWindow.BrushColor = "white"
+  ball = Shapes.AddEllipse(diameter, diameter)
+EndIf
+
+changePosition()
+
+'-------------
+'Create blur
+'-------------
+motionBlur = 1
+
+If motionBlur = 1 Then
+  If imageUsed <> 0 Then
+    ballBlur = Shapes.AddImage(imageUsed)
+  Else
+    GraphicsWindow.PenColor = "black"
+    GraphicsWindow.BrushColor = "white"
+    ballBlur = Shapes.AddEllipse(diameter, diameter)
+  EndIf
+EndIf
+
+Shapes.Move(ballBlur, ballX, ballY)
+Shapes.SetOpacity(ballBlur, 30)
+
+'----------------------
+'Create BB-8 Head
+'----------------------
+If ballImageUsed = 2 Then
+  ballHeadOffset = radius
+  ballHead = Shapes.AddImage(bb8HeadImage)
+EndIf
+
+'------------------
+'Show program
+'------------------
+GraphicsWindow.Show()
+
+If showConsole = 1 Then
+  TextWindow.Show()
+Else
+  TextWindow.Hide()
+EndIf
+
+'Delay briefly before starting loop
+Program.Delay(realDelay * 2)
+
+loopTicks = 0   'Times how many frames have been running (1 per frame, 70 [fps] per second)
+loopTicks2 = 0  'Same as loopTicks, but counts for the info text
+
+'================================================================================
+'Infinite while loop
+While "true"
+'================================================================================
+
+'------------------
+'Reset collisions
+'------------------
+collidedX = 0
+collidedY = 0
+
+'--------------
+'Motion blur
+'--------------
+'The motion blur is always one frame behind the actual ball.
+If motionBlur = 1 Then
+  Shapes.Move(ballBlur, ballX, ballY)
+  Shapes.Rotate(ballBlur, ballAngle)
+  Shapes.Zoom(ballBlur, zoomX, zoomY)
+EndIf
+
+'----------------
+'Move the ball
+'----------------
+'Stores old positions before changing
+previousX = ballX
+previousY = ballY
+
+'Applies velocites to position and then moves
+ballX = ballX + xVel
+ballY = ballY + yVel
+changePosition()
+
+'-------------
+'Rotate ball
+'-------------
+If ballCanTurn = 1 Then
+  ballAngle = ballAngle + xVel
+  Shapes.Rotate(ball, ballAngle)
+EndIf
+
+'-----------------------------
+'Ball stretching and zoom
+'-----------------------------
+'Calculates change in position
+changeX = ballX - previousX
+changeY = ballY - previousY
+
+'Uses change in position to calculate stretch
+newZoomX = Math.Abs(changeX / zoomFactor) + 1
+newZoomY = Math.Abs(1 + changeY / zoomFactor)
+
+'This average old and new stretches for smoothness
+zoomX = (lastZoomX + newZoomX) / 2
+zoomY = (lastZoomY + newZoomY) / 2
+
+'Max and min sizes make sure the ball is never disproportionately stretched
+If zoomX >= zoomCap Then
+  zoomX = zoomCap
+EndIf
+
+If zoomY >= zoomCap Then
+  zoomY = zoomCap
+EndIf
+
+If zoomY <= zoomMin Then
+  zoomY = zoomMin
+EndIf
+
+'Change the zoom
+Shapes.Zoom(ball, zoomX, zoomY)
+
+'---------------------------------
+'Applies gravity and friction
+'---------------------------------
+'Applies gravity if the ball isn't on the ground
+If ballY <= GraphicsWindow.Height - diameter - floorHeight Then
+  yVel = yVel + gravity
+EndIf
+
+'Slows the horizontal speed
+xVel = xVel / friction
+
+'--------------------
+'Rounds velocites
+'--------------------
+roundingPlace = 500
+xVel = (1 / roundingPlace) * Math.Round(roundingPlace * xVel)
+yVel = (1 / roundingPlace) * Math.Round(roundingPlace * yVel)
+
+'--------------------------------------
+'Minimum and maximum speeds
+'--------------------------------------
+If Math.Abs(xVel) <= minX Then
+  xVel = 0
+EndIf
+
+If xVel > maxX Then
+  xVel = maxX
+ElseIf xVel < maxX * -1 Then
+  xVel = maxX * -1
+EndIf
+
+If yVel > maxY Then
+  yVel = maxY
+ElseIf yVel < maxY * -1 Then
+  yVel = maxY * -1
+EndIf
+
+'=======
+'Collisions
+'=======
+'-----------------------
+'Collision with floor
+'-----------------------
+If ballY >= wHeight - diameter - floorHeight Then
+  'Bounce
+  yVel = (yVel * -1) / bounceDecay
+  collidedY = 1
+
+  'Keep ball on-screen
+  While ballY >= wHeight - diameter - floorHeight
+    ballY = ballY - 1
+  EndWhile
+  ballY = ballY + 1
+
+  'Move the ball
+  changePosition()
+
+  'Play bounce sound
+  If yVel <= -1 And shouldBounceSound = 1 Then
+    Sound.Stop(boingSound)
+    Sound.Play(boingSound)
+  EndIf
+EndIf
+
+'-------------------------
+'Collision with ceiling
+'-------------------------
+If ballY <= 0 + ceilingHeight Then
+  'Bounce
+  yVel = Math.Abs(yVel) / bounceDecay
+  collidedY = 1
+
+  'Keep ball on-screen
+  While ballY <= 0 + ceilingHeight
+    ballY = ballY + bouncePrecision
+  EndWhile
+  ballY = ballY - bouncePrecision
+
+  'Move the ball
+  changePosition()
+EndIf
+
+'------------------------
+'Collision with walls
+'------------------------
+'Left wall
+If ballX <= 0 + wallWidth Then
+  'Bounce
+  xVel = (xVel * -1) / bounceDecay
+  collidedX = 1
+
+  'Keep ball on-screen
+  While ballX <= 0 + wallWidth
+    ballX = ballX + bouncePrecision
+  EndWhile
+  ballX = ballX - bouncePrecision
+
+  'Move the ball
+  changePosition()
+EndIf
+
+'Right wall
+If ballX >= wWidth - diameter - wallWidth Then
+  'Bounce
+  xVel = (xVel * -1) / bounceDecay
+  collidedX = 1
+
+  'Keep ball on-screen
+  While ballX >= wWidth - diameter - wallWidth
+    ballX = ballX - bouncePrecision
+  EndWhile
+  ballX = ballX + bouncePrecision
+
+  'Move the ball
+  changePosition()
+EndIf
+
+'--------
+'Mouse
+'--------
+'Gets mouse position
+mouseX = GraphicsWindow.MouseX
+mouseY = GraphicsWindow.MouseY
+
+'Gets center point of the ball
+ballXCentered = ballX + radius
+ballYCentered = ballY + radius
+
+'Gets distance between mouse and ball
+mouseDistance = Math.SquareRoot(Math.Power(ballXCentered - mouseX, 2) + Math.Power(ballYCentered - mouseY, 2))
+
+'If mouse is close to ball and clicked down, then...
+If (Mouse.IsLeftButtonDown And mouseDistance <= mouseRange) And grabbed = 0 And useMouse = 1 Then
+  'Take note of the mouse's position relative to the ball's
+  mouseRelativeX = mouseX - ballXCentered
+  mouseRelativeY = mouseY - ballYCentered
+
+  'Indicate that the ball is being grabbed
+  grabbed = 1
+EndIf
+
+'When ball is grabbed, change velocites based on mouse pulling it
+If grabbed = 1 Then
+  xVel = (mouseX - ballXCentered - mouseRelativeX) / dragSpeed
+  yVel = (mouseY - ballYCentered - mouseRelativeY) / dragSpeed
+
+  'If the ball is being pulled off screen, stop it
+  If collidedX = 1 Then
+    xVel = xVel / (friction * 30)
+  ElseIf collidedY = 1 Then
+    yVel = yVel / (friction * 30)
+  EndIf
+EndIf
+
+'If the mouse is let go...
+If Mouse.IsLeftButtonDown <> "true" And grabbed = 1 Then
+  'Throw the ball
+  xVel = xVel * dragPower
+  yVel = yVel * dragPower
+  grabbed = 0
+
+  'Make BB-8 noise
+  If ballImageUsed = 2 Then
+    bb8Exclaim()
+  EndIf
+EndIf
+
+'---------
+'Console
+'---------
+'This is mainly unused and is just for testing purposes.
+If showConsole = 1 Then
+  TextWindow.Clear()
+  TextWindow.WriteLine("mouseRange: " + mouseRange)
+  TextWindow.WriteLine("Mouse.MouseX: " + Mouse.MouseX)
+  TextWindow.WriteLine("Mouse.MouseY: " + Mouse.MouseY)
+  TextWindow.WriteLine("xVel: " + xVel)
+  TextWindow.WriteLine("friction: " + friction)
+EndIf
+
+'----------------
+'Move the ball
+'----------------
+changePosition()
+
+'-----------------
+'Animate BB-8
+'-----------------
+'Preforms certain actions based on frames elapsed.
+'loopTicks increases by 1 every frame, so 70 (fps) per second.
+If ballImageUsed = 2 And grabbed = 0 Then
+
+  If loopTicks <= 30 Then
+    'Run to the right
+    xVel = xVel + 1
+  ElseIf loopTicks = 35 Then
+    'Make a noise
+    bb8Sound()
+  ElseIf loopTicks <= 60 Then
+    'Run to the left
+    xVel = xVel - 0.5
+  ElseIf loopTicks = 180 Then
+    'Jump up
+    yVel = -20
+    xVel = -10
+  ElseIf loopTicks = 320 Then
+    'Jump randomly
+    yVel = Math.GetRandomNumber(40) * -1
+    xVel = Math.GetRandomNumber(40) - 20
+  ElseIf loopTicks >= 450 Then
+    'Restart the loop
+    loopTicks = 0
+  EndIf
+
+EndIf
+
+If ballImageUsed = 2 And (grabbed = 1 Or loopTicks2 >= fps * 5) Then
+  loopTicks2 = loopTicks2 + 999
+  infoTextOpacity = infoTextOpacity - 3
+  Shapes.SetOpacity(infoText, infoTextOpacity)
+EndIf
+
+'----------
+'End loop
+'----------
+Program.Delay(realDelay)    'Maintain FPS
+loopTicks = loopTicks + 1   'Increase timer
+loopTicks2 = loopTicks2 + 1 'Increase timer 2
+
+'================================================================================
+'End of the while loop
+EndWhile
+'================================================================================
+
+
+'================================================================================
+'Subroutines
+'================================================================================
+
+'-----------------------------------------
+'Places the ball using Shapes.Move
+'-----------------------------------------
+Sub changePosition
+  'Moves the ball
+  Shapes.Move(ball, ballX, ballY)
+
+  'Moves the BB-8 head
+  If ballImageUsed = 2 Then
+    Shapes.Move(ballHead, ballX, ballY - ballHeadOffset)
+  EndIf
+EndSub
+
+'---------------------------------
+'Ambient BB-8 sound effects
+'---------------------------------
+Sub bb8Sound
+  'Stops all previous noises
+  Sound.Stop(bb8Sound1)
+  Sound.Stop(bb8Sound2)
+  Sound.Stop(bb8Sound3)
+
+  'Selects a random number, then chooses 1 of the 3 available sounds
+  randomNumber = Math.GetRandomNumber(3)
+  If randomNumber = 1 Then
+    Sound.Play(bb8Sound1)
+  ElseIf randomNumber = 2 Then
+    Sound.Play(bb8Sound2)
+  Else
+    Sound.Play(bb8Sound3)
+  EndIf
+EndSub
+
+'----------------------------------
+'Sound when BB-8 is thrown
+'----------------------------------
+Sub bb8Exclaim
+  'Stops all previous noises
+  Sound.Stop(bb8Sound4)
+  Sound.Stop(bb8Sound5)
+  Sound.Stop(bb8Sound6)
+
+  'Selects a random number, then chooses 1 of the 3 available sounds
+  randomNumber = Math.GetRandomNumber(3)
+  If randomNumber = 1 Then
+    Sound.Play(bb8Sound4)
+  ElseIf randomNumber = 2 Then
+    Sound.Play(bb8Sound5)
+  Else
+    Sound.Play(bb8Sound6)
+  EndIf
+EndSub
