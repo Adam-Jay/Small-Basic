@@ -1,0 +1,592 @@
+'====================================
+'Game of Life.sb
+'Adam Jay
+'Conway's Game of Life in Small Basic
+'====================================
+'-------------------
+'Set up window
+'-------------------
+GraphicsWindow.Hide()
+
+'Graphics window properties
+wWidth = 1000
+wHeight = wWidth
+
+'Fix window
+wLeft = Desktop.Width / 2.5 - wWidth / 2
+wTop = Desktop.Height / 2.5 - wHeight / 2
+If wLeft < 3 Then
+  wLeft = 3
+EndIf
+If wTop < 10 Then
+  wTop = 10
+EndIf
+
+GraphicsWindow.Width = wWidth
+GraphicsWindow.Height = wHeight
+GraphicsWindow.Left = wLeft
+GraphicsWindow.Top = wTop
+GraphicsWindow.CanResize = "false"
+GraphicsWindow.Title = "Life"
+GraphicsWindow.BackgroundColor = "black"
+
+'Program variables
+stopped = 1           'Whether or not to calculate new generations
+sayStopped = 1        'Actually tells stopped to become zero (used for events which don't follow the normal loop)
+runningFps = 60       'FPS while not paused
+pausedFps = 60        'FPS while paused
+runningDelay = (1 / runningFps) * 1000  'Calculates the miliseconds each frame waits
+pausedDelay = (1 / pausedFps) * 1000    'Calculates the miliseconds each frame waits
+
+'File variables
+directory = Program.Directory                              'Location of application
+directoryFolder = directory + "\Folder"                    'Folder to work in
+originalFileSource = directory + "\textFile\textFile.txt"  'Blank text format
+saveName = ""                                              'Name of the file
+
+saveData = 0
+loadData = 0
+
+'Register events as subroutines
+GraphicsWindow.MouseDown = onMouseDown
+GraphicsWindow.KeyDown = onKeyDown
+Controls.TextTyped = onTextTyped
+Controls.ButtonClicked = onButtonPressed
+
+'Mouse variables
+mouseOnScreen = 0
+mouseClicked = 0
+mouseLeftClickTick = 0  'Actually tells the loop when the mouse has been left-clicked (again, due to events that don't follow the normal loop)
+
+hovered["xReps"] = 0  'The ARRAY's x position of the hovered-over tile
+hovered["yReps"] = 0  'The ARRAY's y position of the hovered-over tile
+hovered["state"] = 1  'The hovered-over tile's array's value
+
+'Array variables
+redrawArray = 0     'When this is 1, it forces a screen refresh
+randomizeScreen = 0 'Used to tell game to do a restart
+
+gridLegnth = 30 'How long and wide the grid is
+gridSize = wWidth / gridLegnth  'Calculates how much physical space each space takes on the window
+
+penWidth = 2
+GraphicsWindow.PenWidth = penWidth
+
+'Color variables
+lifeColor = "#2bf23c" 'Live cell color
+deathColor = "black"  'Dead cell color
+
+createColor = "#1da529" 'Dead cell to turn alive color
+killColor = "#e02e28"   'Alive cell to turn dead color
+
+'-------------------
+'Initialize array
+'-------------------
+'Assigns either 0 or 1 randomly to every space
+For xReps = 0 To gridLegnth - 1
+  For yReps = 0 To gridLegnth - 1
+    a[xReps][yReps] = Math.GetRandomNumber(2) - 1
+  EndFor
+EndFor
+
+'----------------------------
+'Moused-over indicator
+'----------------------------
+'Creates red indicator which shows when the user can kill the hovered-over tile
+GraphicsWindow.BrushColor = killColor
+GraphicsWindow.PenColor = killColor
+mouseKill = Shapes.AddEllipse(gridSize, gridSize)
+
+'Creates green indicator which shows when the user can revive the hovered-over tile
+GraphicsWindow.BrushColor = createColor
+GraphicsWindow.PenColor = createColor
+mouseCreate = Shapes.AddEllipse(gridSize, gridSize)
+
+'Makes them both transparent
+mouseIndicatorOpacity = 0 'Starting transparency: totally invisible
+mouseFadeInSpeed = 35     'How quickly to fade in
+Shapes.SetOpacity(mouseKill, mouseIndicatorOpacity)
+Shapes.SetOpacity(mouseCreate, mouseIndicatorOpacity)
+
+'----------
+'Controls
+'----------
+'Settings for the buttons
+GraphicsWindow.BrushColor = "black"
+GraphicsWindow.FontSize = 14
+
+'Create the buttons
+saveBox = Controls.AddButton("Save", 0, 0)            'Save
+loadBox = Controls.AddButton("Load", 45, 0)           'Load
+clearBox = Controls.AddButton("Clear", 90, 0)         'Clear
+randomizeBox = Controls.AddButton("Randomize", 137, 0)'Randomize
+nameTextCaption = Controls.AddButton("Name", 0, 28)   'Name
+closeBox = Controls.AddButton("X", 209, 28)           'Close tab
+
+Controls.HideControl(nameTextCaption)
+Controls.HideControl(closeBox)
+
+'Create the save text box
+saveTextBox = Controls.AddTextBox(0, 0)
+Controls.Move(saveTextBox, 50, 30)
+Controls.HideControl(saveTextBox)
+
+'Create the load text box
+loadTextBox = Controls.AddTextBox(0, 0)
+Controls.Move(loadTextBox, 50, 30)
+Controls.HideControl(loadTextBox)
+
+'-------------------------------
+'Actally open the windows
+'-------------------------------
+'It's good practice to wait until RIGHT before the main loop to open the window
+openTextWindow()
+GraphicsWindow.Show()
+
+'---------------------
+'Draw first frame
+'---------------------
+If stopped = 1 Then
+  For xReps = 0 To gridLegnth - 1
+    For yReps = 0 To gridLegnth - 1
+      drawArray()
+    EndFor
+  EndFor
+EndIf
+
+'=======
+'Main loop
+While "true"
+'==========
+If stopped = 0 Then
+  '----------------------
+  'Calculate changes
+  '----------------------
+  'Decides what should happen to each tile but applies these changes to a separate array so that everything is processed, THEN changed
+  For xReps = 0 To gridLegnth - 1
+    For yReps = 0 To gridLegnth - 1
+      'Scan all adjascent tiles to the current tile, tallying up what's alive
+      neighbors = 0
+
+      If a[xReps + 1][yReps] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+      If a[xReps + 1][yReps + 1] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+      If a[xReps][yReps + 1] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+      If a[xReps - 1][yReps] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+      If a[xReps - 1][yReps - 1] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+      If a[xReps][yReps - 1] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+      If a[xReps + 1][yReps - 1] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+      If a[xReps - 1][yReps + 1] = 1 Then
+        neighbors = neighbors + 1
+      EndIf
+
+      'Lonliness - not enough neighbors
+      If neighbors < 2 Then
+        change[xReps][yReps] = 0
+      EndIf
+
+      'Overcrowding - too many neighbors
+      If neighbors > 3 Then
+        change[xReps][yReps] = 0
+      EndIf
+
+      'Revival or no change - just the right amount of neighbors
+      If neighbors = 3 Then
+        change[xReps][yReps] = 1
+      EndIf
+    EndFor
+  EndFor
+EndIf
+
+'--------
+'Mouse
+'--------
+'Find and adjust mouse position (since "origin" of a shape is technically the top left corner of it, not the middle)
+mouseX = GraphicsWindow.MouseX - gridSize / 2
+mouseY = GraphicsWindow.MouseY - gridSize / 2
+
+'Snap mouse to grid, then move indicators
+mouseSnappedX = Math.Round((mouseX) / gridSize) * gridSize
+mouseSnappedY = Math.Round((mouseY) / gridSize) * gridSize
+Shapes.Move(mouseKill, mouseSnappedX, mouseSnappedY)
+Shapes.Move(mouseCreate, mouseSnappedX, mouseSnappedY)
+
+'Find if mouse is on-screen or not
+mouseOnScreen = 0
+mouseX = Mouse.MouseX
+mouseY = Mouse.MouseY
+
+If mouseX >= wLeft + 3 And mouseX <= wLeft + 3 + wWidth And mouseY >= wTop + 26 And mouseY <= wTop + 26 + wHeight Then
+  mouseOnScreen = 1
+EndIf
+
+'If mouse is on screen and the game is paused then fade in the indicator; otherwise, fade it out
+If mouseOnScreen = 1 And stopped = 1 Then
+  mouseIndicatorOpacity = mouseIndicatorOpacity + mouseFadeInSpeed
+  If mouseIndicatorOpacity > 100 Then
+    mouseIndicatorOpacity = 100
+  EndIf
+Else
+  mouseIndicatorOpacity = mouseIndicatorOpacity - mouseFadeInSpeed
+  If mouseIndicatorOpacity < 0 Then
+    mouseIndicatorOpacity = 0
+  EndIf
+EndIf
+Shapes.SetOpacity(mouseKill, mouseIndicatorOpacity)
+Shapes.SetOpacity(mouseCreate, mouseIndicatorOpacity)
+
+'------------------
+'Apply changes
+'------------------
+'Actually updates the real array and refreshes the screen
+For xReps = 0 To gridLegnth - 1
+  For yReps = 0 To gridLegnth - 1
+    'Change the real array based on what it calculated should be changed
+    If stopped = 0 Then
+      a[xReps][yReps] = change[xReps][yReps]
+    EndIf
+
+    'Actually draw and enact the changes
+    'If time is frozen and there hasn't been any changes, then there's no need to redraw (it would just create lag)
+    If stopped = 0 Or redrawArray = 1 Then
+      drawArray()
+      change[xReps][yReps] = a[xReps][yReps]
+    EndIf
+
+    'Check if THIS is the tile being hovered over
+    '(This is used elsewhere, but it's more efficient to have it run alongside other code in one for loop than to have its own)
+    tempX = xReps * gridSize
+    tempY = yReps * gridSize
+    If tempX = mouseSnappedX And tempY = mouseSnappedY Then
+      hovered["xReps"] = xReps
+      hovered["yReps"] = yReps
+      hovered["state"] = a[xReps][yReps]
+    EndIf
+  EndFor
+EndFor
+
+'Confirms that the array has now been drawn
+If redrawArray = 1 Then
+  redrawArray = 0
+EndIf
+
+'---------------------
+'Change indicator
+'---------------------
+'Matches the hovered-over color to which actions can be preformed on that tile
+If hovered["state"] = 0 Then
+  Shapes.ShowShape(mouseCreate)
+  Shapes.HideShape(mouseKill)
+Else
+  Shapes.ShowShape(mouseKill)
+  Shapes.HideShape(mouseCreate)
+
+  GraphicsWindow.BrushColor = deathColor
+EndIf
+
+'------------------------
+'Applies mouse click
+'------------------------
+If mouseLeftClickTick = 1 Then
+  'Actually change the tile being hovered over
+  If stopped = 1 Then
+    a[hovered["xReps"]][hovered["yReps"]] = 1 - hovered["state"]
+    change[hovered["xReps"]][hovered["yReps"]] = 1 - hovered["state"]
+    redrawArray = 1
+  EndIf
+
+  'Confirm that the mouse click has gone through
+  mouseLeftClickTick = 0
+EndIf
+
+'Only freezes time at the END of the frame... we don't want it to stop in the midst of the code!
+stopped = sayStopped
+
+'----------------------------
+'Restart and randomize
+'----------------------------
+If randomizeScreen = 1 Then
+  For xReps = 0 To gridLegnth - 1
+    For yReps = 0 To gridLegnth - 1
+      a[xReps][yReps] = Math.GetRandomNumber(2) - 1
+      drawArray()
+    EndFor
+  EndFor
+
+  stopped = 1
+  sayStopped = 1
+  randomizeScreen = 0
+EndIf
+
+'-------------------
+'Clear the screen
+'-------------------
+If wipeScreen = 1 Then
+  'Goes through the array and sets everything to zero
+  For xReps = 0 To gridLegnth - 1
+    For yReps = 0 To gridLegnth - 1
+      a[xReps][yReps] = 0
+      change[xReps][yReps] = 0
+    EndFor
+  EndFor
+
+  'Forces a redraw of the screen
+  redrawArray = 1
+  GraphicsWindow.BrushColor = GraphicsWindow.BackgroundColor
+  GraphicsWindow.FillRectangle(0, 0, wWidth, wHeight)
+
+  'Pauses the program
+  sayStopped = 1
+  stopped = 1
+  wipeScreen = 0
+EndIf
+
+'------------
+'Save data
+'------------
+If saveData = 1 Then
+  saveData = 0
+
+  mouseIndicatorOpacity = 0
+  Shapes.SetOpacity(mouseKill, mouseIndicatorOpacity)
+  Shapes.SetOpacity(mouseCreate, mouseIndicatorOpacity)
+
+  'Create and format file
+  textFile = directoryFolder + "\" + saveName + ".txt"
+
+  File.CopyFile(originalFileSource, textFile)
+  File.WriteContents(textFile, "")
+
+  'Scan everything and add it to the file
+  line = 0
+  For xReps = 0 To gridLegnth - 1
+    For yReps = 0 To gridLegnth - 1
+      'Color in the scan
+      If a[xReps][yReps] = 0 Then
+        GraphicsWindow.BrushColor = "dimgray"
+      Else
+        GraphicsWindow.BrushColor = "silver"
+      EndIf
+      GraphicsWindow.FillEllipse(xReps * gridSize, yReps * gridSize, gridSize, gridSize)
+
+      'Actually write to the file
+      File.WriteLine(textFile, line, a[xReps][yReps])
+      line = line + 1
+    EndFor
+  EndFor
+
+  redrawArray = 1
+EndIf
+
+If loadData = 1 Then
+  loadData = 0
+  stopped = 1
+  sayStopped = 1
+  mouseIndicatorOpacity = 0
+  Shapes.SetOpacity(mouseKill, mouseIndicatorOpacity)
+  Shapes.SetOpacity(mouseCreate, mouseIndicatorOpacity)
+
+  'Find origin of file
+  textFile = directoryFolder + "\" + loadName + ".txt"
+
+  'Actually load in the file
+  rgb = (255 / gridLegnth)
+
+  line = 0
+  For xReps = 0 To gridLegnth - 1
+    For yReps = 0 To gridLegnth - 1
+      'Overwrites the array
+      If File.ReadLine(textFile, line) <> "" Then
+        a[xReps][yReps] = File.ReadLine(textFile, line)
+      Else
+        a[xReps][yReps] = 0
+      EndIf
+      line = line + 1
+
+      'Generates a nice color effect
+      GraphicsWindow.BrushColor = GraphicsWindow.GetColorFromRGB(xReps * rgb, yReps * rgb, xReps * 0.5 * rgb)
+      GraphicsWindow.FillEllipse(xReps * gridSize, yReps * gridSize, gridSize, gridSize)
+    EndFor
+  EndFor
+
+  'Actually draw the file
+  For xReps = 0 To gridLegnth - 1
+    For yReps = 0 To gridLegnth - 1
+      drawArray()
+    EndFor
+  EndFor
+EndIf
+
+'Maintain FPS
+If stopped = 0 Then
+  Program.Delay(runningDelay)
+Else
+  Program.Delay(pausedDelay)
+EndIf
+'======
+'End loop
+EndWhile
+'=======
+
+'========
+'Subscripts
+'========
+'-------
+'Draw
+'-------
+Sub drawArray
+  'The tile is dead, so clear it out with a black rectangle
+  If a[xReps][yReps] = 0 Then
+    GraphicsWindow.BrushColor = deathColor
+    GraphicsWindow.FillRectangle(xReps * gridSize, yReps * gridSize, gridSize + penWidth / 2, gridSize + penWidth / 2)
+
+  'The tile is alive, so draw in a live cell (circle)
+  ElseIf a[xReps][yReps] = 1 Then
+    GraphicsWindow.BrushColor = lifeColor
+    GraphicsWindow.FillEllipse(xReps * gridSize, yReps * gridSize, gridSize, gridSize)
+  EndIf
+EndSub
+
+'-----------------
+'Mouse clicked
+'-----------------
+'Since onMouseDown is an event and doesn't follow the loop, it just sets variables that are checked at the RIGHT POINT within the loop.
+Sub onMouseDown
+  'Left click - sends the change to the loop
+  If Mouse.IsLeftButtonDown Then
+    mouseLeftClickTick = 1
+  EndIf
+
+  'Right click - freeze time
+  If Mouse.IsRightButtonDown Then
+    sayStopped = 1 - stopped
+  EndIf
+EndSub
+
+'---------------
+'Key pressed
+'---------------
+Sub onKeyDown
+  'Gets the last key pressed
+  lastKey = GraphicsWindow.LastKey
+
+  'Escape closes the program
+  If lastKey = "Escape" Then
+    Program.End()
+  EndIf
+
+  'Hit enter on text box
+  If lastKey = "Return" Then
+    'Hide the text area
+    Shapes.HideShape(nameTextCaption)
+    Shapes.HideShape(saveTextBox)
+    Shapes.HideShape(loadTextBox)
+    Shapes.HideShape(closeBox)
+
+    If lastPressed = saveBox Then
+      saveName = Controls.GetTextBoxText(saveTextBox)
+      saveData = 1
+    EndIf
+
+    If lastPressed = loadBox Then
+      loadName = Controls.GetTextBoxText(loadTextBox)
+      loadData = 1
+    EndIf
+  EndIf
+EndSub
+
+'-------------------
+'Button pressed
+'-------------------
+Sub onButtonPressed
+  lastPressed = Controls.LastClickedButton
+
+  'Save button pressed
+  If lastPressed = saveBox Then
+    Shapes.ShowShape(nameTextCaption)
+    Shapes.HideShape(loadTextBox)
+    Shapes.ShowShape(saveTextBox)
+    Shapes.ShowShape(closeBox)
+
+  'Load button pressed
+  ElseIf lastPressed = loadBox Then
+    Shapes.ShowShape(nameTextCaption)
+    Shapes.HideShape(saveTextBox)
+    Shapes.ShowShape(loadTextBox)
+    Shapes.ShowShape(closeBox)
+
+  'Clears the screen
+  ElseIf lastPressed = clearBox Then
+    wipeScreen = 1
+
+  'Randomizes the screen
+  ElseIf lastPressed = randomizeBox Then
+    randomizeScreen = 1
+
+  'Closes text boxes
+  ElseIf lastPressed = closeBox Then
+    Shapes.HideShape(closeBox)
+    Shapes.HideShape(saveTextBox)
+    Shapes.HideShape(loadTextBox)
+    Shapes.HideShape(nameTextCaption)
+  EndIf
+EndSub
+
+'----------------
+'Text typed in
+'----------------
+Sub onTextTyped
+  'There's nothing here right now.
+EndSub
+
+'----------------
+'Text window
+'----------------
+Sub openTextWindow
+  'Set up the actual window
+  TextWindow.Title = GraphicsWindow.Title + " - Information"
+  TextWindow.Top = GraphicsWindow.Top - 4
+  TextWindow.Left = GraphicsWindow.Left + wWidth + 10
+
+  'Overview of the program
+  TextWindow.ForegroundColor = "green"
+  TextWindow.CursorTop = 1
+  TextWindow.WriteLine(" Welcome to Conway's Game of Life, coded in Small Basic by Adam Jay!")
+  TextWindow.WriteLine(" Made by John Conway in 1970, it has simple rules that produce unique results:")
+  TextWindow.WriteLine("   1. If a cell has less than two neighbors, it dies of lonliness.")
+  TextWindow.WriteLine("   2. If a cell has more than three neighbors, it dies of crowding.")
+  TextWindow.WriteLine("   3. If a cell has three neighbors, it continues living.")
+  TextWindow.WriteLine("   4. If a dead cell has three neighbors, it is revived.")
+  TextWindow.WriteLine("")
+
+  'Information about controls
+  TextWindow.BackgroundColor = "white"
+  TextWindow.ForegroundColor = "black"
+  TextWindow.WriteLine(" RIGHT CLICK to freeze time or resume time.")
+  TextWindow.WriteLine(" LEFT CLICK while time is frozen to create or destroy cells.")
+
+  TextWindow.CursorTop = TextWindow.CursorTop + 1
+  TextWindow.WriteLine(" CLEAR button to wipe the screen.")
+  TextWindow.WriteLine(" RANDOMIZE button to generate a random world.")
+
+  TextWindow.CursorTop = TextWindow.CursorTop + 1
+  TextWindow.WriteLine(" SAVE button to save your world, and LOAD button to load it.")
+  TextWindow.WriteLine(" First, name the file to save or load, then hit enter.")
+
+  'Special notice about file names
+  TextWindow.CursorTop = TextWindow.CursorTop + 1
+  TextWindow.WriteLine(" NOTE: Don't add slashes or any unusual characters to the name of your file.")
+EndSub
