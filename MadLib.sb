@@ -1,0 +1,408 @@
+'=========================
+'MadLib.sb
+'Adam Jay
+'A text-based madlib game!
+'=========================
+
+'Restart label - this is where the program goes back to when you restart
+start:
+
+'Prepare text window with names and position
+TextWindow.Title = "Adam Foye - Mad Lib Project"
+TextWindow.Top = Desktop.Height / 5
+TextWindow.Left = Desktop.Width / 5
+
+'Initialize  varibles - get everything set up
+warning = 0
+
+city = "" 'The [Gettysburg] address
+
+number = 0 'fourscore and [seven] years ago
+pluralNoun1 = "" 'our [fathers] brought forth
+noun1 = "" 'on this continent, a new [nation]
+pluralNoun2 = "" 'ALL [men] are
+adjective1 = "" 'created [equal].
+
+adjective2 = "" 'engaged in a [great] civil war
+noun2 = "" 'great [battle-field] of that war.
+verb1 = "" 'we have come [to dedicate]
+adjective3 = "" 'as a [final] resting place
+pluralNoun3 = "" 'those who here gave their [lives]
+verb2 = "" 'that nation might [live]
+
+'Load trumpet sound
+soundName = "trumpetSound.mp3"
+fileDirectory = Program.Directory
+soundEffect = fileDirectory + "\" + soundName
+
+'Special text colors - used to be rainbow but now it's just green...
+rainbowColor1 = "green"
+rainbowColor2 = "darkgreen"
+rainbowColor3 = "green"
+rainbowColor4 = "green"
+rainbowColor5 = "darkgreen"
+rainbowColor6 = "darkgreen"
+rainbowColor7 = "green"
+
+'Welcome - write the welcome message
+cursorTopStart = 2
+TextWindow.CursorLeft = 5
+TextWindow.CursorTop = cursorTopStart
+
+writeWelcome()
+TextWindow.Write(" to Adam's Mad Lib! Press any key to begin!")
+
+TextWindow.PauseWithoutMessage()
+
+'Send welcome away - move it to the bottom of the screen and then disssapear
+Sound.PlayChime()
+For i = 0 to (24 - cursorTopStart)
+  TextWindow.Clear()
+  TextWindow.CursorLeft = 5
+  TextWindow.CursorTop = cursorTopStart + i
+  writeWelcome()
+  TextWindow.Write(" to Adam's Mad Lib!")
+  Program.Delay((1 / 15) * 1000)
+EndFor
+
+TextWindow.Clear()
+
+'Gather information - user input
+answerColor = "yellow"
+
+TextWindow.Write("Please give your favorite city or place: ")
+TextWindow.ForegroundColor = answerColor
+city = TextWindow.Read()
+  If city = "" Then
+    city = "Gettysburg"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a nonzero number: ")
+TextWindow.ForegroundColor = answerColor
+number = TextWindow.ReadNumber()
+  If number = 0 Then
+    number = 7
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a plural noun: ")
+TextWindow.ForegroundColor = answerColor
+pluralNoun1 = TextWindow.Read()
+  If pluralNoun1 = "" Then
+    pluralNoun1 = "fathers"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a noun: ")
+TextWindow.ForegroundColor = answerColor
+noun1 = TextWindow.Read()
+  If noun1 = "" Then
+    noun1 = "nation"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a plural noun: ")
+TextWindow.ForegroundColor = answerColor
+pluralNoun2 = TextWindow.Read()
+  If pluralNoun2 = "" Then
+    pluralNoun2 = "men"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give an adjective: ")
+TextWindow.ForegroundColor = answerColor
+adjective1 = TextWindow.Read()
+  If adjective1 = "" Then
+    adjective1 = "equal"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give another adjective: ")
+TextWindow.ForegroundColor = answerColor
+adjective2 = TextWindow.Read()
+  If adjective2 = "" Then
+    adjective2 = "great"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a noun: ")
+TextWindow.ForegroundColor = answerColor
+noun2 = TextWindow.Read()
+  If noun2 = "" Then
+    noun2 = "battle-field"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a verb (ex. live, dream): ")
+TextWindow.ForegroundColor = answerColor
+verb1 = TextWindow.Read()
+  If verb1 = "" Then
+    verb1 = "dedicate"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give an adjective: ")
+TextWindow.ForegroundColor = answerColor
+adjective3 = TextWindow.Read()
+  If adjective3 = "" Then
+    adjective3 = "final"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a plural noun: ")
+TextWindow.ForegroundColor = answerColor
+pluralNoun3 = TextWindow.Read()
+  If pluralNoun3 = "" Then
+    pluralNoun3 = "lives"
+    warning()
+  EndIf
+clear()
+
+TextWindow.Write("Please give a verb (ex. run, dance, play): ")
+TextWindow.ForegroundColor = answerColor
+verb2 = TextWindow.Read()
+  If verb2 = "" Then
+    verb2 = "live"
+    warning()
+  EndIf
+clear()
+
+TextWindow.CursorTop = TextWindow.CursorTop + 1
+
+'====================================
+'Name the program
+TextWindow.Title = "The Gettysburg Mad Lib"
+
+'Play sound - for some reason this doesn't ever work more than once...
+Sound.Play(soundEffect)
+
+'Give warning if the user skipped words
+If warning > 0 Then
+  TextWindow.CursorLeft = 1
+  TextWindow.ForegroundColor = "red"
+  TextWindow.Write("You have not filled out ")
+  TextWindow.Write(warning)
+  TextWindow.WriteLine(" words. They have been substituted.")
+  TextWindow.CursorTop = TextWindow.CursorTop + 1
+EndIf
+
+'Name the speech
+TextWindow.BackgroundColor = "white"
+TextWindow.ForegroundColor = "black"
+TextWindow.WriteLine(" The " + city + " address!")
+TextWindow.CursorTop = TextWindow.CursorTop + 1
+TextWindow.BackgroundColor = "black"
+
+'Fourscore and [number] years ago
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.Write("Fourscore and ")
+  pickColor()
+  TextWindow.Write(number)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(" years ago")
+
+'our [pluralNoun1] brought forth
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.Write("our ")
+  pickColor()
+  TextWindow.Write(pluralNoun1)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(" brought forth")
+
+'on this continent, a new [noun1]
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.Write("on this continent, a new ")
+  pickColor()
+  TextWindow.Write(noun1)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(",")
+
+'conceived in Liberty, and dedicated to
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine("conceived in Liberty, and dedicated to ")
+
+'the proposition that ALL [pluralNoun2] are created [adjective1].
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.Write("the proposition that ALL ")
+  pickColor()
+  TextWindow.Write(pluralNoun2)
+  TextWindow.ForegroundColor = "white"
+TextWindow.Write(" are created ")
+  pickColor()
+  TextWindow.Write(adjective1)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(".")
+
+'Next paragraph
+TextWindow.CursorTop = TextWindow.CursorTop + 1
+
+'Now we are engaged in a [adjective2] civil war,
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.Write("Now we are engaged in a ")
+  pickColor()
+  TextWindow.Write(adjective2)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(" civil war,")
+
+'testing whether that [noun1] or any [noun1]
+'so conceived and so dedicated, can long endure.
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.Write("testing whether that ")
+  pickColor()
+  TextWindow.Write(noun1)
+  TextWindow.ForegroundColor = "white"
+TextWindow.Write(" or any ")
+  pickColor()
+  TextWindow.WriteLine(noun1)
+  TextWindow.ForegroundColor = "white"
+TextWindow.CursorLeft = 1
+TextWindow.WriteLine("so conceived and so dedicated, can long endure.")
+
+'We have come [verb1] a portion of that field,
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+TextWindow.Write("We have come to ")
+  pickColor()
+  TextWindow.Write(verb1)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(" a portion of that field,")
+
+'as a(n) [adjective3] resting place for those who
+'gave their [pluralNoun3] that that [noun1] might [verb2].
+TextWindow.CursorLeft = 1
+TextWindow.ForegroundColor = "white"
+
+    'a vs. an
+    startingLetter = Text.GetSubText(adjective3, 1, 1)
+    If startingLetter = "a" or startingLetter = "e" or startingLetter = "i" or startingLetter = "o" or startingLetter = "u" Then
+      TextWindow.Write("as an ")
+    Else
+      TextWindow.Write("as a ")
+    EndIf
+
+  pickColor()
+  TextWindow.Write(adjective3)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(" resting place for those who")
+
+TextWindow.CursorLeft = 1
+TextWindow.Write("gave their ")
+  pickColor()
+  TextWindow.Write(pluralNoun3)
+  TextWindow.ForegroundColor = "white"
+TextWindow.Write(" that that ")
+  pickColor()
+  TextWindow.Write(noun1)
+  TextWindow.ForegroundColor = "white"
+TextWindow.Write(" might ")
+  pickColor()
+  TextWindow.Write(verb2)
+  TextWindow.ForegroundColor = "white"
+TextWindow.WriteLine(".")
+
+'====================================
+
+'Asks to play again. It double checks so that you don't do it by accident
+TextWindow.CursorTop = TextWindow.CursorTop + 1
+TextWindow.BackgroundColor = "white"
+TextWindow.ForegroundColor = "black"
+TextWindow.Write("Press any key to play again!")
+Program.Delay(1000)
+TextWindow.PauseWithoutMessage()
+TextWindow.CursorLeft = 0
+TextWindow.Write("Press any key to confirm you want to play again...")
+Program.Delay(1000)
+TextWindow.PauseWithoutMessage()
+TextWindow.BackgroundColor = "black"
+TextWindow.ForegroundColor = "white"
+TextWindow.Clear()
+Goto start
+
+'Close the program - this code isn't used anymore
+'TextWindow.PauseWithoutMessage()
+'Program.End()
+
+'Subroutines
+
+'Clears the screen and waits a small amount of time
+Sub clear
+  Program.Delay((0.1) * 1000)
+  TextWindow.Clear()
+  TextWindow.ForegroundColor = "white"
+EndSub
+
+'This is triggered when someone doesn't fill in a word properly
+Sub warning
+  warning = warning + 1
+EndSub
+
+'Writes the rainbow part of the welcome message
+Sub writeWelcome
+  TextWindow.ForegroundColor = "darkred"
+  TextWindow.Write("W")
+  TextWindow.ForegroundColor = "red"
+  TextWindow.Write("E")
+  TextWindow.ForegroundColor = "yellow"
+  TextWindow.Write("L")
+  TextWindow.ForegroundColor = "green"
+  TextWindow.Write("C")
+  TextWindow.ForegroundColor = "blue"
+  TextWindow.Write("O")
+  TextWindow.ForegroundColor = "darkblue"
+  TextWindow.Write("M")
+  TextWindow.ForegroundColor = "darkmagenta"
+  TextWindow.Write("E")
+  TextWindow.ForegroundColor = "white"
+EndSub
+
+'Gets a random color based on the pre-set pool of colors.
+'It used to be rainbow colors but now it's just two types of green so most of this code isn't useful anymore...
+Sub pickColor
+  randomNumber = Math.GetRandomNumber(6) + 1
+  If randomNumber = 1 Then
+    TextWindow.ForegroundColor = rainbowColor1
+  EndIf
+
+  If randomNumber = 2 Then
+    TextWindow.ForegroundColor = rainbowColor2
+  EndIf
+
+  If randomNumber = 3 Then
+    TextWindow.ForegroundColor = rainbowColor3
+  EndIf
+
+  If randomNumber = 4 Then
+    TextWindow.ForegroundColor = rainbowColor4
+  EndIf
+
+  If randomNumber = 5 Then
+    TextWindow.ForegroundColor = rainbowColor5
+  EndIf
+
+  If randomNumber = 6 Then
+    TextWindow.ForegroundColor = rainbowColor6
+  EndIf
+
+  If randomNumber = 7 Then
+    TextWindow.ForegroundColor = rainbowColor7
+  EndIf
+
+EndSub
