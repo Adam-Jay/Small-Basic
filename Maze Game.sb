@@ -1,0 +1,1363 @@
+'===========================================================================
+'Maze Game.sb
+'Adam Jay
+'Play, create, save and load your own mazes with this a-maze-ing program! :)
+'===========================================================================
+'---------------------------------
+'Set up the graphics window
+'---------------------------------
+'Adjusts the window size based on screen size
+minimumWindowSize = 670
+windowWidth = Desktop.Width / 2.5
+
+'Ensures that the window isn't too small
+If windowWidth < minimumWindowSize Then
+  windowWidth = minimumWindowSize
+EndIf
+
+'Sets the height equal to the width
+windowHeight = windowWidth
+
+'Positions the graphics window
+windowLeft = Desktop.Width / 2 - windowWidth / 2 - 60 - 675
+windowTop = Desktop.Height / 2 - windowHeight / 2 - 30
+
+'Makes sure the window's on-screen (not too far to the left)
+If windowLeft < 10 Then
+  windowLeft = 10
+EndIf
+
+'Hides the graphics window, then implements the changes
+GraphicsWindow.Hide()
+GraphicsWindow.Width = windowWidth
+GraphicsWindow.Height = windowHeight
+GraphicsWindow.Left = windowLeft
+GraphicsWindow.Top = windowTop
+GraphicsWindow.Title = "Adam Foye's A-maze-ing maze!"
+GraphicsWindow.CanResize = "false"
+
+'------------------
+'Controls (GUI)
+'------------------
+'Sets some basic properties for the buttons
+buttonOpacity = 0
+lastInputButtonPressed = ""
+GraphicsWindow.BrushColor = "black"
+GraphicsWindow.FontSize = 25
+
+'Create the top row of buttons: save, load, clear, and randomize.
+saveBox = Controls.AddButton("Save", 25, 0)
+loadBox = Controls.AddButton("Load", 104, 0)
+clearBox = Controls.AddButton("Clear", 183, 0)
+randomizeBox = Controls.AddButton("Randomize", 268, 0)
+
+'Creates buttons for editing tools: start and finish of maze, changing size.
+GraphicsWindow.FontSize = 20
+placeStartBox = Controls.AddButton("Place start", 25, windowHeight)
+placeEndBox = Controls.AddButton("Place end", 150, windowHeight)
+setSizeBox = Controls.AddButton("Set size", 263, windowHeight)
+
+'Creates captions and close button for the text input boxes; hides them until needed
+GraphicsWindow.FontSize = 14
+nameTextCaption = Controls.AddButton("Name", 440, 8)
+closeBox = Controls.AddButton("X", 649, 8)
+Controls.HideControl(nameTextCaption)
+Controls.HideControl(closeBox)
+
+sizeTextCaption = Controls.AddButton("New size:", 385, windowHeight + 4)
+closeBox2 = Controls.AddButton("X", 621, windowHeight + 4)
+Controls.HideControl(sizeTextCaption)
+Controls.HideControl(closeBox2)
+
+'Create the save text box; hides it until needed
+saveTextBox = Controls.AddTextBox(490, 10)
+Controls.HideControl(saveTextBox)
+
+'Create the load text box; hides it until needed
+loadTextBox = Controls.AddTextBox(490, 10)
+Controls.HideControl(loadTextBox)
+
+'Creates the change size text box; hides it until needed
+sizeTextBox = Controls.AddTextBox(462, windowHeight + 6)
+Controls.HideControl(sizeTextBox)
+
+'Applies button upacity
+updateButtonOpacity()
+
+'------------------------
+'Set up the program
+'------------------------
+'Register input events as subroutines
+GraphicsWindow.MouseDown = onMouseDown
+GraphicsWindow.KeyDown = onKeyDown
+Controls.ButtonClicked = onButtonPressed
+
+'File-related properties
+directory = Program.Directory
+directoryFolder = directory + "\Saves"
+originalFileSource = directory + "\emptyFileTemplate\emptyFileTemplate.txt"
+
+'---------------------------------
+'Load in images and sounds
+'---------------------------------
+'This image was found under the creative commons search
+blurryImage = directory + "\Resources\blurryImage.jpg"
+mazeInfo = directory + "\Resources\mazeInfo.png"
+
+'These images are my own
+errorMessage = directory + "\Resources\errorMessage.png"
+playerImageLarge = directory + "\Resources\playerImage.png"
+playerImage = directory + "\Resources\playerImageShrunk2.png"
+
+'This image is my own, except the smiley face which was found under creative commons
+winMessage = directory + "\Resources\winMessage.png"
+
+'This is an old windows sound effect
+utopiaRecycle = directory + "\Resources\utopiaRecycle.wav"
+
+'This sound is under creative commons
+winSound = directory + "\Resources\winSound.mp3"
+
+'This sound is my own
+placementSound = directory + "\Resources\placementSound.wav"
+
+'--------------------------------
+'More program properties
+'--------------------------------
+'Basic properties like framerate
+fps = 60
+realDelay = (1 / fps) * 1000
+showConsole = 1
+logConsole = 0
+started = 0
+
+'Variables that control the growing / shrinking of the window
+expansionSize = 50
+expansionTime = 0.3
+expansionReps = 10
+
+'Loop-related variables (boolean: when they're on (1), they tell the program to preform some action)
+'All of these are needed because events like onMouseDown are not predictable in WHEN within the loop they execute...
+'Whereas with these, it checks at a specific point in the loop to execute when (and in the order) I want it to
+frozen = 0
+firstFrozen = 0
+firstUnFrozen = 0
+clearArray = 0
+updateMaze = 0
+saveData = 0
+loadData = 0
+displayError = 0
+playerWon = 0
+loopTicks = 0
+
+'Graphics properties
+penWidth = 2
+backgroundColor = "#a9b7ce"
+wallColor = "black"
+floorColor = "white"
+
+'Maze properties
+mazeGridSize = 30
+newSize = mazeGridSize
+mazeSize = windowWidth - 50
+tileSize = mazeSize / (mazeGridSize + 2)
+mazeXOffset = 25
+mazeYOffset = 40
+
+'Hovered-over tile shape
+GraphicsWindow.BrushColor = "#878787"
+GraphicsWindow.PenWidth = 0
+indicatorInUse = 1
+indicatorFadeSpeed = 10
+indicatorX = 0
+indicatorY = 0
+indicatorOpacity = 0
+mouseIndicator = Shapes.AddRectangle(tileSize, tileSize)
+Shapes.SetOpacity(mouseIndicator, indicatorOpacity)
+
+'Placing starting and ending tiles indicator
+placingStart = 0
+placingEnd = 0
+
+startColor = "#4286f4"
+GraphicsWindow.BrushColor = startColor
+startPlacer = Shapes.AddRectangle(tileSize, tileSize)
+Shapes.HideShape(startPlacer)
+
+endColor = "#41f4a6"
+GraphicsWindow.BrushColor = endColor
+endPlacer = Shapes.AddRectangle(tileSize, tileSize)
+Shapes.HideShape(endPlacer)
+
+'--------------------
+'Create the array
+'--------------------
+'Note that some of this code is a bit redundant since later on, the file "Maze1" is loaded, overriding many of the changes done here.
+
+'Creates the main maze array as an empty space with walls
+clearTheArray()
+
+'Creates an arary for the starting and ending positions of the maze
+mazeStart["x"] = 1
+mazeStart["y"] = 1
+mazeEnd["x"] = 2
+mazeEnd["y"] = 2
+
+'Create filler values for the hovered array (which stores which tile the mouse is hovering over)
+hovered["xReps"] = 0
+hovered["yReps"] = 0
+hovered["state"] = 0
+
+'-------------------------------------
+'Create the player coordinates
+'-------------------------------------
+'Note that the player is not actually a shape but is an image that's constantly being redrawn
+playerColor = backgroundColor
+player["x"] = mazeStart["x"]
+player["y"] = mazeStart["y"]
+
+'-------------------------
+'Create a list of levels
+'-------------------------
+'If the user just keeps playing, then cycles through this list of levels
+'If the user goes to edit, then it breaks this cycle
+inLevels = 1
+currentLevel = 1
+levels[1] = "Maze1"
+levels[2] = "Maze2"
+levels[3] = "Maze3"
+levels[4] = "Maze4"
+levels[5] = "Maze5"
+levels[6] = "Small"
+levels[7] = "Squares"
+levels[8] = "Asteroid Field"
+levels[9] = "The Gauntlet"
+levels[10] = "Winner"
+levels["length"] = 10
+
+'------------------------------------------------------------
+'Adds a little text to tell user to click in the window
+'------------------------------------------------------------
+GraphicsWindow.BrushColor = "black"
+GraphicsWindow.FontSize = 20
+usefulTipText = Shapes.AddText("Select this window with left-click and use the arrow keys to move! Have fun!")
+Shapes.Move(usefulTipText, 100, 8)
+Shapes.HideShape(usefulTipText)
+
+'------------------------------------
+'Show the windows to the user
+'------------------------------------
+GraphicsWindow.PenWidth = penWidth
+GraphicsWindow.BackgroundColor = backgroundColor
+GraphicsWindow.Show()
+openTextWindow()
+
+'Draws the starting screen and waits for the user to press space
+GraphicsWindow.DrawResizedImage(mazeInfo, 0, 0, windowWidth, windowHeight)
+
+'This commented-out code was for having space pressed on the graphics window (sadly, there is not a way to have graphics window and text window BOTH waiting for user input at once)
+'While lastKey <> "Space"
+'  Program.Delay(1)
+'EndWhile
+'lastKey = ""
+
+'Instead of the above code, it waits for any input through the text window
+TextWindow.PauseWithoutMessage()
+TextWindow.Hide()
+
+'Move window to middle of screen
+windowLeft = Desktop.Width / 2 - windowWidth / 2 - 60
+GraphicsWindow.Left = windowLeft
+
+'Show the tip telling user to click on window
+Shapes.ShowShape(usefulTipText)
+
+'--------------------------
+'Load in the first level
+'--------------------------
+loadName = levels[currentLevel]
+loadTheData()
+
+'-------------------------
+'Prepare for the loop
+'-------------------------
+'Draws a nice blurry background, then the maze on top of it.
+GraphicsWindow.DrawResizedImage(blurryImage, 0, 0, windowWidth, windowHeight + 50)
+drawMaze()
+
+'Indicates that the loop is now about to begin
+started = 1
+
+'============
+'Start main loop
+While "true"
+'============
+'--------------------
+'Hide the tip text
+'--------------------
+loopTicks = loopTicks + 1
+If loopTicks = fps * 4 Then
+  Shapes.HideShape(usefulTipText)
+EndIf
+
+'--------------------------------------------
+'Actions to be taken are executed here
+'--------------------------------------------
+'Display error if there's some kind of problem
+If displayError = 1 Then
+  GraphicsWindow.DrawResizedImage(errorMessage, mazeXOffset, mazeYOffset, mazeSize, mazeSize)
+  Program.Delay(1800)
+  updateMaze = 1
+  displayError = 0
+EndIf
+
+'Player won the game!
+If playerWon = 1 Then
+  'Show victory and play cheering sound
+  GraphicsWindow.DrawResizedImage(winMessage, mazeXOffset, mazeYOffset, mazeSize, mazeSize)
+  Sound.Stop(winSound)
+  Sound.Play(winSound)
+
+  'Move player back to start
+  player["x"] = mazeStart["x"]
+  player["y"] = mazeStart["y"]
+
+  Program.Delay(3100)
+
+  'Goes to the next level
+  If inLevels = 1 Then
+    'Cycles through levels, if it's the last level then go to the first
+    currentLevel = currentLevel + 1
+    If currentLevel > levels["length"] Then
+      currentLevel = 1
+    EndIf
+
+    'Load in the new level
+    loadName = levels[currentLevel]
+    loadTheData()
+  EndIf
+
+  lastKey = ""
+  updateMaze = 1
+  playerWon = 0
+EndIf
+
+'Refreshes the screen if the updateMaze variable is 1
+If updateMaze = 1 Then
+  drawMaze()
+  updateMaze = 0
+EndIf
+
+'Fills the array with zeros (except for the outermost edges)
+If clearArray = 1 Then
+  clearTheArray()
+  clearArray = 0
+  updateMaze = 1
+EndIf
+
+'Fills the array with random values
+If randomizeArray = 1 Then
+  randomizeTheArray()
+  randomizeArray = 0
+  updateMaze = 1
+EndIf
+
+'Save data
+If saveData = 1 Then
+  saveTheData()
+
+  updateMaze = 1
+  saveData = 0
+EndIf
+
+'Load data
+If loadData = 1 Then
+  loadTheData()
+
+  updateMaze = 1
+  loadData = 0
+EndIf
+
+'----------------------
+'Moving the player
+'----------------------
+'If the user is pressing an arrow key AND the position to which the player would move is empty, then move there.
+If frozen = 0 Then
+  'Move to the right
+  If lastKey = "Right" And maze[player["x"] + 1][player["y"]] = 0 Then
+    drawPlayerTile()
+    player["x"] = player["x"] + 1
+
+  'Move to the left
+  ElseIf lastKey = "Left" And maze[player["x"] - 1][player["y"]] = 0 Then
+    drawPlayerTile()
+    player["x"] = player["x"] - 1
+
+  'Move up
+  ElseIf lastKey = "Up" And maze[player["x"]][player["y"] - 1] = 0 Then
+    drawPlayerTile()
+    player["y"] = player["y"] - 1
+
+  'Move down
+  ElseIf lastKey = "Down" And maze[player["x"]][player["y"] + 1] = 0 Then
+    drawPlayerTile()
+    player["y"] = player["y"] + 1
+  EndIf
+EndIf
+
+'Clears the input now that the action has been executed
+lastKey = ""
+
+'---------------------------------------------
+'Show or hide start and ending points
+'---------------------------------------------
+'Shows the starting and ending points if in editing mode
+If frozen = 1 Then
+  xReps = mazeStart["x"]
+  yReps = mazeStart["y"]
+  GraphicsWindow.BrushColor = startColor
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2.2, tileSize + penWidth / 2.2)
+
+  xReps = mazeEnd["x"]
+  yReps = mazeEnd["y"]
+  GraphicsWindow.BrushColor = endColor
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2.2, tileSize + penWidth / 2.2)
+
+Else
+  'Hides them by "whiting them out" (drawing over them)
+  xReps = mazeStart["x"]
+  yReps = mazeStart["y"]
+  GraphicsWindow.BrushColor = floorColor
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2, tileSize + penWidth / 2)
+
+  xReps = mazeEnd["x"]
+  yReps = mazeEnd["y"]
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2, tileSize + penWidth / 2)
+EndIf
+
+'---------------------
+'Draws the player
+'---------------------
+xReps = player["x"]
+yReps = player["y"]
+
+If frozen = 0 Then
+  'Draws the tile under the player
+  drawPlayerTile()
+Else
+  'Draws a special-colored indicator under the player to show the user that the game has been paused
+  GraphicsWindow.BrushColor = playerColor
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize - 0.4, tileSize - 0.4)
+EndIf
+
+'Draws the player
+GraphicsWindow.DrawResizedImage(playerImage, xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize - 0.4, tileSize - 0.4)
+
+'--------
+'Mouse
+'--------
+'Find and adjust mouse position (since "origin" of a shape is technically the top left corner of it, not the middle where we want it to be)
+mouseX = GraphicsWindow.MouseX
+mouseY = GraphicsWindow.MouseY
+mouseAdjustedX = mouseX - tileSize / 2
+mouseAdjustedY = mouseY - tileSize / 2
+
+'Align the indicator with the grid by rounding it to the nearest position on it       (this is a basic rounding formula)
+indicatorX = Math.Round((mouseAdjustedX - mazeXOffset) / tileSize) * tileSize + mazeXOffset
+indicatorY = Math.Round((mouseAdjustedY - mazeYOffset) / tileSize) * tileSize + mazeYOffset
+
+'-----------------------------------------
+'Finds if mouse is on-screen or not
+'-----------------------------------------
+'First, checks if the user has moved the window (since that would throw off calculations)
+'If they have, then update the corresponding variables
+If windowLeft <> GraphicsWindow.Left Then
+  windowLeft = GraphicsWindow.Left
+EndIf
+If windowTop <> GraphicsWindow.Top Then
+  windowTop = GraphicsWindow.Top
+EndIf
+
+mouseInWindow = 0
+mouseDesktopX = Mouse.MouseX
+mouseDesktopY = Mouse.MouseY
+
+'Tests for if the mouse's x is within the graphics window
+If mouseDesktopX >= windowLeft + 3 And mouseDesktopX <= windowLeft + 3 + windowWidth Then
+  'Tests for if the mouse's y is within the graphics window (this code could be in just one line but it would be too long)
+  If mouseDesktopY >= windowTop + 26 And mouseDesktopY <= windowTop + 26 + windowHeight Then
+    mouseInWindow = 1
+  EndIf
+EndIf
+
+'---------------------------------
+'Keep indicator in the maze
+'---------------------------------
+'If it's outside of the maze, force it back into the maze and indicate that it should fade out...
+inMaze = 1
+
+'Left wall of the maze
+If indicatorX < mazeXOffset Then
+  indicatorX = mazeXOffset
+  inMaze = 0
+
+'Right wall of the maze
+ElseIf indicatorX >= mazeXOffset + mazeSize Then
+  indicatorX = mazeXOffset + mazeSize - tileSize
+  inMaze = 0
+
+'Top wall of the maze
+ElseIf indicatorY < mazeYOffset Then
+  indicatorY = mazeYOffset
+  inMaze = 0
+
+'Bottom wall of the maze
+ElseIf indicatorY > mazeYOffset + mazeSize - tileSize Then
+  indicatorY = mazeYOffset + mazeSize - tileSize
+  inMaze = 0
+EndIf
+
+'Actually fade in or out the indicator
+If (inMaze = 0 Or mouseInWindow = 0) And indicatorOpacity > 0 Then
+  'The mouse is either not in the maze or not in the window at all, so fade it out
+  indicatorOpacity = indicatorOpacity - indicatorFadeSpeed
+
+ElseIf inMaze = 1 And indicatorOpacity < 50 Then
+  'Everything's fine, fade it in.
+  indicatorOpacity = indicatorOpacity + indicatorFadeSpeed
+EndIf
+
+'Hide the indicators if not in use
+If indicatorInUse = 0 Then
+  Shapes.HideShape(mouseIndicator)
+Else
+  Shapes.ShowShape(mouseIndicator)
+EndIf
+
+If placingStart = 0 Then
+  Shapes.HideShape(startPlacer)
+Else
+  Shapes.ShowShape(startPlacer)
+EndIf
+
+If placingEnd = 0 Then
+  Shapes.HideShape(endPlacer)
+Else
+  Shapes.ShowShape(endPlacer)
+EndIf
+
+'Completely and instantly hides the indicator if not in editing mode
+If frozen = 0 Then
+  indicatorOpacity = 0
+
+  'Also stops any editing that was going on previously
+  leftClicked = 0
+EndIf
+
+'Apply the changes
+Shapes.SetOpacity(mouseIndicator, indicatorOpacity)
+Shapes.SetOpacity(startPlacer, indicatorOpacity * 2)
+Shapes.SetOpacity(endPlacer, indicatorOpacity * 2)
+Shapes.Move(mouseIndicator, indicatorX, indicatorY)
+Shapes.Move(startPlacer, indicatorX, indicatorY)
+Shapes.Move(endPlacer, indicatorX, indicatorY)
+
+'----------------------------------------------
+'Finds which tile is being hovered over
+'----------------------------------------------
+scanMaze()
+
+'----------------------------------------------
+'The user has clicked to change the tile
+'----------------------------------------------
+If leftClicked = 1 And frozen = 1 And indicatorInUse = 1 Then
+  'Sees if the mouse is STILL being held down... if it is, then continue
+  leftClicked = 0
+  If Mouse.IsLeftButtonDown Then
+    leftClicked = 1
+  EndIf
+
+  'Sees if this is the FIRST click the mouse has made (not being held down yet)
+  If firstClicked = 1 Then
+    'Determines if the click was intended to create or destroy tiles
+    mouseDrawType = 1 - hovered["state"]
+    firstClicked = 0
+  EndIf
+
+  'Gets the position of the cursor
+  xReps = hovered["xReps"]
+  yReps = hovered["yReps"]
+
+  'Actually changes the array (makes sure that it isn't a starting, ending, or player position first)
+  If (xReps <> mazeStart["x"] Or yReps <> mazeStart["y"]) And (xReps <> mazeEnd["x"] Or yReps <> mazeEnd["y"]) And (xReps <> player["x"] Or yReps <> player["y"]) Then
+    maze[xReps][yReps] = mouseDrawType
+
+    'Draw JUST the changed tile (no need to redraw EVERYTHING, which would be very laggy)
+    If maze[xReps][yReps] = 0 Then
+      GraphicsWindow.BrushColor = floorColor
+    Else
+      GraphicsWindow.BrushColor = wallColor
+    EndIf
+    GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2, tileSize + penWidth / 2)
+  EndIf
+EndIf
+
+'--------------------------------------------------------
+'The user has clicked to place the start or finish
+'--------------------------------------------------------
+'Place the start position
+If leftClicked = 1 And placingStart = 1 Then
+  'Play a little sound effect
+  Sound.Stop(placementSound)
+  Sound.Play(placementSound)
+
+  'Get rid of the old starting position's image
+  xReps = mazeStart["x"]
+  yReps = mazeStart["y"]
+  GraphicsWindow.BrushColor = floorColor
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 1.8, tileSize + penWidth / 1.8)
+
+  'Set the starting position, and turn it into a blank space
+  xReps = hovered["xReps"]
+  yReps = hovered["yReps"]
+  mazeStart["x"] = xReps
+  mazeStart["y"] = yReps
+
+  leftClicked = 0
+  placingStart = 0
+  indicatorInUse = 1
+EndIf
+
+'Place the end position
+If leftClicked = 1 And placingEnd = 1 Then
+  'Play a little sound effect
+  Sound.Stop(placementSound)
+  Sound.Play(placementSound)
+
+  'Get rid of the old starting position's image
+  xReps = mazeEnd["x"]
+  yReps = mazeEnd["y"]
+  GraphicsWindow.BrushColor = floorColor
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 1.8, tileSize + penWidth / 1.8)
+
+  'Set the starting position, and turn it into a blank space
+  xReps = hovered["xReps"]
+  yReps = hovered["yReps"]
+  mazeEnd["x"] = xReps
+  mazeEnd["y"] = yReps
+
+  leftClicked = 0
+  placingEnd = 0
+  indicatorInUse = 1
+EndIf
+
+'-------------------------------------------------------
+'Change from editing to playing or vice versa
+'-------------------------------------------------------
+'If the user has frozen, then open up the editing options
+If firstFrozen = 1 And frozen = 1 Then
+  For i = 1 To expansionReps
+    'Fades in the top editing buttons
+    buttonOpacity = buttonOpacity + (100 / expansionReps)
+    updateButtonOpacity()
+
+    'Expands the screen to display editing options
+    GraphicsWindow.Height = GraphicsWindow.Height + (expansionSize / expansionReps)
+
+    'Makes sure that the window doesn't grow too large by accident
+    If GraphicsWindow.Height > windowHeight + expansionSize Then
+      GraphicsWindow.Height = windowHeight + expansionReps
+    EndIf
+
+    Program.Delay(expansionTime / expansionReps * 1000)
+  EndFor
+
+  firstFrozen = 0
+EndIf
+
+'Close editing options
+If firstUnFrozen = 1 And frozen = 0 Then
+  For i = 1 To expansionReps
+    'Fade out the top editing buttons
+    buttonOpacity = buttonOpacity - (100 / expansionReps)
+    updateButtonOpacity()
+
+    'Hide the bottom-screen bar
+    GraphicsWindow.Height = GraphicsWindow.Height - (expansionSize / expansionReps)
+
+    'Ensures that the window doesn't shrink too much
+    If GraphicsWindow.Height < windowHeight Then
+      GraphicsWindow.Height = windowHeight
+    EndIf
+
+    Program.Delay(expansionTime / expansionReps * 1000)
+  EndFor
+
+  firstUnFrozen = 0
+EndIf
+
+'--------------------------------
+'Checks if the user has won
+'--------------------------------
+If player["x"] = mazeEnd["x"] And player["y"] = mazeEnd["y"] Then
+  playerWon = 1
+EndIf
+
+'------------------------------
+'Updates the text window
+'------------------------------
+updateTextWindow()
+
+'-----------------
+'Maintain FPS
+'-----------------
+Program.Delay(realDelay)
+
+'=======
+'End loop
+EndWhile
+'=======
+
+'=========
+'Subroutines
+'=========
+'------------------------------------
+'Draws the maze to the screen
+'------------------------------------
+Sub drawMaze
+  'Goes through the array...
+  For xReps = 0 To mazeGridSize + 1
+    For yReps = 0 To mazeGridSize + 1
+      'If the position is 0 (empty), then fill it with background color
+      If maze[xReps][yReps] = 0 Then
+        GraphicsWindow.BrushColor = floorColor
+
+      'Otherwise, the position is a wall; fill it with wall color
+      Else
+        GraphicsWindow.BrushColor = wallColor
+      EndIf
+
+      'If the player is on this tile, then draw the player
+      If xReps = player["x"] And yReps = player["y"] And frozen = 0 Then
+        GraphicsWindow.BrushColor = playerColor
+      EndIf
+
+      'Actually draws the tile to the graphics window
+      GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2, tileSize + penWidth / 2)
+    EndFor
+  EndFor
+EndSub
+
+'-------------------------------
+'Fills the array with zeros
+'-------------------------------
+Sub clearTheArray
+  For xReps = 0 To mazeGridSize + 1
+    For yReps = 0 To mazeGridSize + 1
+      'If it's one of the edges of the maze, then wall it off
+      If xReps = 0 Or xReps = mazeGridSize + 1 Or yReps = 0 Or yReps = mazeGridSize + 1 Then
+        maze[xReps][yReps] = 1
+
+      'Otherwise, fill it with nothing
+      Else
+        maze[xReps][yReps] = 0
+      EndIf
+
+      'Make sure the start, end, and player aren't drawn over
+      If (xReps = mazeStart["x"] And yReps = mazeStart["y"]) Or (xReps = mazeEnd["x"] And yReps = mazeEnd["y"]) Or (xReps = player["x"] And yReps = player["y"]) Then
+        maze[xReps][yReps] = 0
+      EndIf
+    EndFor
+  EndFor
+EndSub
+
+'-------------------------------
+'Fills the array with ones
+'-------------------------------
+'This is used to fill in the entire array with walls...
+'It is essential when shrinking an array (going from big to small)
+'since all the out-of-bounds spots need to be filled in
+Sub fillTheArray
+  For xReps = 0 To mazeGridSize + 1
+    For yReps = 0 To mazeGridSize + 1
+      maze[xReps][yReps] = 1
+    EndFor
+  EndFor
+EndSub
+
+'----------------------------
+'Creates the maze array
+'----------------------------
+Sub randomizeTheArray
+  For xReps = 0 To mazeGridSize + 1
+    For yReps = 0 To mazeGridSize + 1
+      'If it's one of the edges of the maze, then wall it off
+      If xReps = 0 Or xReps = mazeGridSize + 1 Or yReps = 0 Or yReps = mazeGridSize + 1 Then
+        maze[xReps][yReps] = 1
+
+      'Otherwise, randomly assign a boolean value (space is either filled or not filled)
+      Else
+        maze[xReps][yReps] = Math.GetRandomNumber(2) - 1
+      EndIf
+
+      'Make sure the start, end, and player aren't drawn over
+      If (xReps = mazeStart["x"] And yReps = mazeStart["y"]) Or (xReps = mazeEnd["x"] And yReps = mazeEnd["y"]) Or (xReps = player["x"] And yReps = player["y"]) Then
+        maze[xReps][yReps] = 0
+      EndIf
+    EndFor
+  EndFor
+EndSub
+
+'----------------------
+'Open text window
+'----------------------
+Sub openTextWindow
+  If showConsole = 1 Then
+    'Positions the window relative to the graphics window
+    TextWindow.Top = GraphicsWindow.Top - 4
+    TextWindow.Left = GraphicsWindow.Left + windowWidth - 75
+    TextWindow.Title = GraphicsWindow.Title + " - Information"
+
+    'Writes to the text window
+    updateTextWindow()
+  EndIf
+EndSub
+
+'-------------------------------
+'Writes to the text window
+'-------------------------------
+Sub updateTextWindow
+  If showConsole = 1 And logConsole = 1 Then
+    TextWindow.Clear()
+
+    'Logs certain variables for testing purposes
+    TextWindow.WriteLine("mazeGridSize: " + mazeGridSize)
+    TextWindow.WriteLine("tileSize: " + tileSize)
+    TextWindow.WriteLine("saveData: " + saveData)
+    TextWindow.WriteLine("loadData: " + loadData)
+    TextWindow.WriteLine("saveName: " + saveName)
+    TextWindow.WriteLine("loadName: " + loadName)
+    TextWindow.WriteLine("hovered[xReps] : " + hovered["xReps"])
+    TextWindow.WriteLine("hovered[yReps] : " + hovered["yReps"])
+    TextWindow.WriteLine("hovered[state] : " + hovered["state"])
+    TextWindow.WriteLine("lastKey: " + lastKey)
+    TextWindow.WriteLine("newSize: " + newSize)
+    TextWindow.WriteLine("placingEnd: " + placingEnd)
+    TextWindow.WriteLine("placingStart: " + placingStart)
+    TextWindow.WriteLine("mazeStart[x]: " + mazeStart["x"])
+    TextWindow.WriteLine("mazeStart[y]: " + mazeStart["y"])
+    TextWindow.WriteLine("mazeEnd[x]: " + mazeEnd["x"])
+    TextWindow.WriteLine("mazeEnd[y]: " + mazeEnd["y"])
+  ElseIf showConsole = 1 And logConsole = 0 Then
+    logConsole = -1
+    TextWindow.Clear()
+
+    '-----------------------------------
+    'Gives instructions to the user
+    '-----------------------------------
+    TextWindow.ForegroundColor = "gray"
+    TextWindow.Write(" Hi! This text window will give you useful info. ")
+    TextWindow.ForegroundColor = "red"
+    TextWindow.WriteLine("Don't forget to scroll ")
+    TextWindow.WriteLine("to read everything! Press space once you're done reading!")
+
+    'Describes how to play the game
+    TextWindow.CursorTop = TextWindow.CursorTop + 2
+    TextWindow.ForegroundColor = "yellow"
+    TextWindow.WriteLine("How to play: ")
+    TextWindow.ForegroundColor = "white"
+    TextWindow.WriteLine("Use the arrow keys on your keyboard to move.")
+    TextWindow.WriteLine("The goal is to get to the end of the maze.")
+
+    'Describes how to load in levels
+    TextWindow.CursorTop = TextWindow.CursorTop + 2
+    TextWindow.ForegroundColor = "yellow"
+    TextWindow.WriteLine("How to load levels: ")
+    TextWindow.ForegroundColor = "white"
+    TextWindow.WriteLine("To load levels, simply right click (to go into editing mode) and")
+    TextWindow.WriteLine("click the load button. Then, type in the name of the level you want to ")
+    TextWindow.WriteLine("load. Make sure you spell the name correctly. There are many premade")
+    TextWindow.WriteLine("levels which are available. Their names are listed at the bottom of the window.")
+
+    'Tells user how to make their own levels
+    TextWindow.CursorTop = TextWindow.CursorTop + 2
+    TextWindow.ForegroundColor = "yellow"
+    TextWindow.WriteLine("How to create your own levels: ")
+    TextWindow.ForegroundColor = "white"
+    TextWindow.WriteLine("There are many tools available for making your own mazes. Access them")
+    TextWindow.WriteLine("by right-clicking. This will open up the menu. Clear will wipe out the screen,")
+    TextWindow.WriteLine("randomize will generate a random screen, and set size will open up a text box")
+    TextWindow.WriteLine("which will allow you to clear and resize the maze (min of 4, max of 100)")
+    TextWindow.WriteLine("NOTE that resizing the screen will also clear it, so be careful!")
+    TextWindow.WriteLine("Left click and drag to destroy or create walls. You can change the position")
+    TextWindow.WriteLine("of the start and end of the maze with their respective buttons.")
+
+    'Tells user how to save their level
+    TextWindow.CursorTop = TextWindow.CursorTop + 2
+    TextWindow.ForegroundColor = "yellow"
+    TextWindow.WriteLine("How to save your levels: ")
+    TextWindow.ForegroundColor = "white"
+    TextWindow.WriteLine("While in editing mode, click the save button and type in the name you want")
+    TextWindow.WriteLine("for your level, then hit enter once you're ready to submit it. NOTE that the")
+    TextWindow.WriteLine("title should be ALPHANUMERIC (just numbers and letters). Your levels, and ")
+    TextWindow.WriteLine("all of the pre-loaded levels, can be found in the Saves folder of the program.")
+
+    'Lists some levels available
+    TextWindow.CursorTop = TextWindow.CursorTop + 2
+    TextWindow.ForegroundColor = "yellow"
+    TextWindow.WriteLine("Premade level names: ")
+    TextWindow.ForegroundColor = "white"
+    TextWindow.WriteLine("NOTE that these levels will automatically be played in a cycle when the game")
+    TextWindow.WriteLine("starts. However, if you choose to edit them or your own levels, then you will")
+    TextWindow.Write("leave the cycle. So, I reccomend playing them all first, then making your own :)")
+    TextWindow.ForegroundColor = "gray"
+    TextWindow.WriteLine("   Maze1")
+    TextWindow.WriteLine("   Maze2")
+    TextWindow.WriteLine("   Maze3")
+    TextWindow.WriteLine("   Maze4")
+    TextWindow.WriteLine("   Maze5")
+    TextWindow.WriteLine("   Small")
+    TextWindow.WriteLine("   Squares")
+    TextWindow.WriteLine("   Asteroid Field")
+    TextWindow.WriteLine("   The Gauntlet")
+
+    'Have fun!! :)
+    TextWindow.CursorTop = TextWindow.CursorTop + 2
+    TextWindow.ForegroundColor = "yellow"
+    TextWindow.WriteLine("MOST IMPORTANTLY: ")
+    TextWindow.ForegroundColor = "white"
+    TextWindow.WriteLine("Have fun!!!!")
+    TextWindow.WriteLine("Press space to close this window and start the game! :)")
+
+    'Bring the cursor to the top of the text window
+    TextWindow.CursorTop = 0
+  EndIf
+EndSub
+
+'-----------------
+'Mouse clicked
+'-----------------
+Sub onMouseDown
+  If started = 1 Then
+    'The right-click button freezes or unfreezes time
+    If Mouse.IsRightButtonDown Then
+      frozen = 1 - frozen
+      If frozen = 1 Then
+        firstFrozen = 1
+        inLevels = 0
+      Else
+        firstUnFrozen = 1
+      EndIf
+
+      rightClicked = 1
+    EndIf
+
+    'The left-click button creates or destroys tiles
+    If Mouse.IsLeftButtonDown Then
+      firstClicked = 1
+      leftClicked = 1
+    EndIf
+  EndIf
+EndSub
+
+'---------------
+'Key pressed
+'---------------
+Sub onKeyDown
+  'Gets the last key pressed
+  lastKey = GraphicsWindow.LastKey
+
+  'Escape closes the program
+  If lastKey = "Escape" Then
+    Program.End()
+
+  'The user has hit enter to submit the name of their file
+  ElseIf lastKey = "Return" Then
+    'Hide the TOP text-submission area
+    If lastInputButtonPressed = saveBox Or lastInputButtonPressed = loadBox Then
+      Shapes.HideShape(nameTextCaption)
+      Shapes.HideShape(saveTextBox)
+      Shapes.HideShape(loadTextBox)
+      Shapes.HideShape(closeBox)
+
+    'Hide the BOTTOM text-submission area
+    ElseIf lastInputButtonPressed = setSizeBox Then
+      Shapes.HideShape(sizeTextCaption)
+      Shapes.HideShape(sizeTextBox)
+      Shapes.HideShape(closeBox2)
+    EndIf
+
+    'The user has indicated they are ready to SAVE the game
+    If lastInputButtonPressed = saveBox Then
+      saveName = Controls.GetTextBoxText(saveTextBox)
+      saveData = 1
+    EndIf
+
+    'The user has indicated they are ready to LOAD the selected file
+    If lastInputButtonPressed = loadBox Then
+      loadName = Controls.GetTextBoxText(loadTextBox)
+      loadData = 1
+    EndIf
+
+    'The user has CHANGED the size of the maze
+    If lastInputButtonPressed = setSizeBox Then
+      newSize = Controls.GetTextBoxText(sizeTextBox)
+
+      'If the size is acceptable, then apply the new changes
+      If newSize > 3 And newSize <= 100 Then
+        'Fills in the old array, blocking out their values
+        '(since you can't delete items in an array, the best I could do is fill them in)
+        fillTheArray()
+
+        'Update grid variables
+        mazeGridSize = newSize
+        tileSize = mazeSize / (mazeGridSize + 2)
+        createNewIndicator()
+
+        'Moves the player, start, and finish to a safe spot
+        player["x"] = 1
+        player["y"] = 1
+        mazeStart["x"] = 1
+        mazeStart["y"] = 1
+        mazeEnd["x"] = 2
+        mazeEnd["y"] = 2
+
+        'Initialize the new arary
+        If frozen = 0 Then
+          firstFrozen = 1
+          frozen = 1
+        EndIf
+        clearArray = 1
+
+      'The user's input gave some kind of error
+      Else
+        displayError = 1
+      EndIf
+    EndIf
+  EndIf
+EndSub
+
+'-------------------
+'Button pressed
+'-------------------
+Sub onButtonPressed
+  'Gets the last-clicked button
+  lastPressed = Controls.LastClickedButton
+
+  'The randomize button has been pressed
+  If lastPressed = randomizeBox Then
+    If frozen = 0 Then
+      firstFrozen = 1
+      frozen = 1
+    EndIf
+
+    randomizeArray = 1
+
+  'Clear button pressed
+  ElseIf lastPressed = clearBox Then
+    If frozen = 0 Then
+      firstFrozen = 1
+      frozen = 1
+    EndIf
+    clearArray = 1
+
+  'Save button pressed
+  ElseIf lastPressed = saveBox Then
+    'Stores the save button pressed in a separate variable so that other buttons (BESIDES other input buttons) won't interfere with it
+    lastInputButtonPressed = lastPressed
+
+    'Displays the SAVE text-submission area
+    Shapes.ShowShape(nameTextCaption)
+    Shapes.HideShape(loadTextBox)
+    Shapes.ShowShape(saveTextBox)
+    Shapes.ShowShape(closeBox)
+
+    'Hides other text-submission areas so that there aren't many all at once
+    Shapes.HideShape(sizeTextCaption)
+    Shapes.HideShape(sizeTextBox)
+    Shapes.HideShape(closeBox2)
+
+  'Load button pressed
+  ElseIf lastPressed = loadBox Then
+    'Stores the load button pressed in a separate variable so that other buttons (BESIDES other input buttons) won't interfere with it
+    lastInputButtonPressed = lastPressed
+
+    'Displays the LOAD text-submission area
+    Shapes.ShowShape(nameTextCaption)
+    Shapes.HideShape(saveTextBox)
+    Shapes.ShowShape(loadTextBox)
+    Shapes.ShowShape(closeBox)
+
+    'Hides other text-submission areas so that there aren't many all at once
+    Shapes.HideShape(sizeTextCaption)
+    Shapes.HideShape(sizeTextBox)
+    Shapes.HideShape(closeBox2)
+
+  'Closes text boxes for save and load
+  ElseIf lastPressed = closeBox Then
+    Shapes.HideShape(closeBox)
+    Shapes.HideShape(saveTextBox)
+    Shapes.HideShape(loadTextBox)
+    Shapes.HideShape(nameTextCaption)
+  EndIf
+
+  'Change size button pressed
+  If lastPressed = setSizeBox Then
+    'Stores the change size button pressed in a separate variable so that other buttons (BESIDES other input buttons) won't interfere with it
+    lastInputButtonPressed = lastPressed
+
+    'Shows the change size text-submission area
+    Shapes.ShowShape(sizeTextCaption)
+    Shapes.ShowShape(sizeTextBox)
+    Shapes.ShowShape(closeBox2)
+
+    'Hides other text-submission areas so that there aren't many all at once
+    Shapes.HideShape(nameTextCaption)
+    Shapes.HideShape(saveTextBox)
+    Shapes.HideShape(loadTextBox)
+    Shapes.HideShape(closeBox)
+  EndIf
+
+  'Closes text area for changing size
+  If lastPressed = closeBox2 Then
+    Shapes.HideShape(sizeTextCaption)
+    Shapes.HideShape(sizeTextBox)
+    Shapes.HideShape(closeBox2)
+  EndIf
+
+  'Place start button pressed
+  If lastPressed = placeStartBox Then
+    indicatorInUse = placingStart
+    placingStart = 1 - placingStart
+    placingEnd = 0
+  EndIf
+
+  'Place end button pressed
+  If lastPressed = placeEndBox Then
+    indicatorInUse = placingEnd
+    placingEnd = 1 - placingEnd
+    placingStart = 0
+  EndIf
+EndSub
+
+'-------------
+'Save Data
+'-------------
+'Saves the array by crating a txt file with its contents written as a long string
+Sub saveTheData
+  'Play a little sound effect
+  Sound.Stop(utopiaRecycle)
+  Sound.Play(utopiaRecycle)
+
+  'Create and format a file by making a copy of a blank template file
+  textFile = directoryFolder + "\" + saveName + ".txt"
+  File.CopyFile(originalFileSource, textFile)
+  File.WriteContents(textFile, "")
+
+  'Scan everything and add it to a long string that is then stored
+  stringCode = ""
+  For xReps = 0 To mazeGridSize + 1
+    For yReps = 0 To mazeGridSize + 1
+      'Color in the scan for visual effect - this serves no purpose but to look neat for the user :)
+      If maze[xReps][yReps] = 0 Then
+        GraphicsWindow.BrushColor = "silver"
+      Else
+        GraphicsWindow.BrushColor = "dimgray"
+      EndIf
+      GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2, tileSize + penWidth / 2)
+
+      'Add the current position to the code of positions
+      stringCode = Text.Append(stringCode, maze[xReps][yReps])
+
+      If yReps = mazeGridSize + 1 Then
+        Program.Delay(15)
+      EndIf
+    EndFor
+  EndFor
+
+  'Actually write the code to the file, and take note of the size of the grid and any other level-specific data
+  File.WriteLine(textFile, 1, stringCode)
+
+  File.WriteLine(textFile, 2, mazeGridSize)
+  File.WriteLine(textFile, 3, mazeStart["x"])
+  File.WriteLine(textFile, 4, mazeStart["y"])
+  File.WriteLine(textFile, 5, mazeEnd["x"])
+  File.WriteLine(textFile, 6, mazeEnd["y"])
+EndSub
+
+'-------------
+'Load Data
+'-------------
+Sub loadTheData
+  'Find origin of file
+  textFile = directoryFolder + "\" + loadName + ".txt"
+  stringCode = File.ReadLine(textFile, 1)
+
+  'Finds the maze dimensions based on the file
+  oldMazeGridSize = mazeGridSize
+  mazeGridSize = File.ReadLine(textFile, 2)
+
+  'If the maze dimensions don't exist, then display an error message, if everything is ok, then proceed with the loading
+  If mazeGridSize < 3 Then
+    mazeGridSize = oldMazeGridSize
+    displayError = 1
+  Else
+    'Play a little sound effect
+    Sound.Stop(utopiaRecycle)
+    Sound.Play(utopiaRecycle)
+
+    'Goes into playing mode
+    frozen = 0
+    firstUnFrozen = 1
+
+    'Changes the tile size based on the size of the maze
+    tileSize = mazeSize / (mazeGridSize + 2)
+
+    'Moves the player to the starting position of the current level
+    mazeStart["x"] = File.ReadLine(textFile, 3)
+    mazeStart["y"] = File.ReadLine(textFile, 4)
+    player["x"] = mazeStart["x"]
+    player["y"] = mazeStart["y"]
+
+    'Gets the current maze's ending position
+    mazeEnd["x"] = File.ReadLine(textFile, 5)
+    mazeEnd["y"] = File.ReadLine(textFile, 6)
+
+    'Change the indicator to suit the new size
+    createNewIndicator()
+
+    'Converts the code into the array
+    position = 1
+    For xReps = 0 To mazeGridSize + 1
+      For yReps = 0 To mazeGridSize + 1
+        'Sets the array value to its corresponding value within the string
+        maze[xReps][yReps] = Text.GetSubText(stringCode, position, 1)
+        position = position + 1
+
+        'Color in the load for visual effect - this serves no purpose but to look neat for the user :)
+        If maze[xReps][yReps] = 0 Then
+          GraphicsWindow.BrushColor = "silver"
+        Else
+          GraphicsWindow.BrushColor = "dimgray"
+        EndIf
+        GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2, tileSize + penWidth / 2)
+
+        If yReps = mazeGridSize + 1 Then
+          Program.Delay(15)
+        EndIf
+      EndFor
+    EndFor
+  EndIf
+EndSub
+
+'-----------------------------------------------------------------------
+'Determines WHICH tile of the array is being hovered-over
+'-----------------------------------------------------------------------
+Sub scanMaze
+  For xReps = 0 To mazeGridSize + 1
+    For yReps = 0 To mazeGridSize + 1
+      'Uses the x and y array position to find the x and y GRAPHICS window position
+      tempX = xReps * tileSize + mazeXOffset
+      tempY = yReps * tileSize + mazeYOffset
+
+      'If this position equals the position of the indicator, then THIS is the position that is hovered over!
+      If tempX = indicatorX And tempY = indicatorY Then
+        hovered["xReps"] = xReps
+        hovered["yReps"] = yReps
+        hovered["state"] = maze[xReps][yReps]
+      EndIf
+    EndFor
+  EndFor
+EndSub
+
+'------------------------------------------
+'Draws the tile that the player is on
+'------------------------------------------
+'If used before the player is drawn, it will draw the tile under the player.
+'If used after the player is drawn, it will remove the player from that tile.
+'This can be used to clear the player's PREVIOUS position from the screen
+Sub drawPlayerTile
+  'Finds the tile that the player is on
+  xReps = player["x"]
+  yReps = player["y"]
+
+  'Gets the state of the tile, then changes the color according to it, then draws it.
+  If maze[xReps][yReps] = 0 Then
+    GraphicsWindow.BrushColor = floorColor
+  Else
+    GraphicsWindow.BrushColor = wallColor
+  EndIf
+  GraphicsWindow.FillRectangle(xReps * tileSize + mazeXOffset, yReps * tileSize + mazeYOffset, tileSize + penWidth / 2, tileSize + penWidth / 2)
+EndSub
+
+'-------------------------------------
+'Changes the opacity of buttons
+'-------------------------------------
+Sub updateButtonOpacity
+  'Ensures the opacity doesn't go under zero or over 100 (since that's the range of opacity)
+  If buttonOpacity > 100 Then
+    buttonOpacity = 100
+  ElseIf buttonOpacity < 0 Then
+    buttonOpacity = 0
+  EndIf
+
+  'If the shape is still visible, keep it shown but fade it out by changing all their opacites
+  If buttonOpacity > 0 Then
+    Shapes.ShowShape(saveBox)
+    Shapes.ShowShape(loadBox)
+    Shapes.ShowShape(clearBox)
+    Shapes.ShowShape(randomizeBox)
+
+    Shapes.SetOpacity(saveBox, buttonOpacity)
+    Shapes.SetOpacity(loadBox, buttonOpacity)
+    Shapes.SetOpacity(clearBox, buttonOpacity)
+    Shapes.SetOpacity(randomizeBox, buttonOpacity)
+    Shapes.SetOpacity(saveTextBox, buttonOpacity)
+    Shapes.SetOpacity(loadTextBox, buttonOpacity)
+    Shapes.SetOpacity(nameTextCaption, buttonOpacity)
+    Shapes.SetOpacity(closeBox, buttonOpacity)
+
+  'If the opacity is zero, then it's hidden, so hide the shape completely
+  'This is mainly because even a button with zero opacity (invisible) can still be clicked
+  Else
+    Shapes.HideShape(saveBox)
+    Shapes.HideShape(loadBox)
+    Shapes.HideShape(clearBox)
+    Shapes.HideShape(randomizeBox)
+    Shapes.HideShape(saveTextBox)
+    Shapes.HideShape(loadTextBox)
+    Shapes.HideShape(nameTextCaption)
+    Shapes.HideShape(closeBox)
+  EndIf
+EndSub
+
+'-------------------------------------------------
+'Re-creates the indicators with a new size
+'-------------------------------------------------
+Sub createNewIndicator
+  If mazeGridSize <> oldMazeGridSize Then
+    'Removes the old indicators and makes a new ones for the new size of the grid
+    Shapes.Remove(mouseIndicator)
+    Shapes.Remove(startPlacer)
+    Shapes.Remove(endPlacer)
+    placingStart = 0
+    placingEnd = 0
+
+    GraphicsWindow.BrushColor = "#878787"
+    GraphicsWindow.PenColor = "#878787"
+    mouseIndicator = Shapes.AddRectangle(tileSize, tileSize)
+
+    Shapes.SetOpacity(mouseIndicator, indicatorOpacity)
+    Shapes.Move(mouseIndicator, indicatorX, indicatorY)
+
+    GraphicsWindow.BrushColor = startColor
+    GraphicsWindow.PenColor = startColor
+    startPlacer = Shapes.AddRectangle(tileSize, tileSize)
+    Shapes.HideShape(startPlacer)
+
+    GraphicsWindow.BrushColor = endColor
+    GraphicsWindow.PenColor = endColor
+    endPlacer = Shapes.AddRectangle(tileSize, tileSize)
+    Shapes.HideShape(endPlacer)
+  EndIf
+EndSub
