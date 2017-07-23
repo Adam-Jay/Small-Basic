@@ -1,0 +1,590 @@
+'=================================================================
+'Boing Ball.sb
+'Adam Jay
+'Use left click to jump and right click to move! Avoid the danger!
+'=================================================================
+
+'Load program files
+app_directory = Program.Directory
+file_directory = Program.Directory + "\Files"
+
+dangerpic = file_directory + "\Danger.png"
+bloodpic = file_directory + "\Blood.png"
+text_pic = file_directory + "\GameOver.png"
+background = file_directory + "\background.jpg"
+background2 = file_directory + "\background2.jpg"
+song = file_directory + "\Oblique Shadows.wav"
+
+'Set graphics window: note that it should be kept hidden until everything is ready: spawn in shapes, set size, THEN show it afterwards
+GraphicsWindow.Hide()
+wwidth = 500
+hheight = 500
+draw_varibles = 0
+first_time = 1
+
+GraphicsWindow.Left = Desktop.Width / 2 - wwidth
+GraphicsWindow.Top = Desktop.Height / 2 - hheight
+GraphicsWindow.Width = wwidth
+GraphicsWindow.Height = hheight
+GraphicsWindow.Title = "Boing Ball"
+GraphicsWindow.BackgroundColor = "white"
+
+'Open console if draw_varibles is turned on
+If draw_varibles = 1 Then
+  TextWindow.Left = Desktop.Width / 2 + 15
+  TextWindow.Top = Desktop.Height / 2 - hheight
+  TextWindow.Title = "Console"
+EndIf
+
+'Key pressed action allows the sub "Keys" to be called any time the keyboard gives input. The sub takes note of what key is being pressed.
+GraphicsWindow.KeyDown = Keys
+
+'The start of the main game: this is what it loops back to when you restart the game. It IGNORES things on the second go-through based on the "first_time" varible.
+'For example, it won't bring up the main menu or replay the song already playing.
+Beginning:
+GraphicsWindow.DrawResizedImage(background2, 0, 0, wwidth, hheight) 'Minimizes screen flash
+
+'======================================================================
+'Init variables
+'Player varibles
+dead = 0
+r = 0
+xv = 0
+yv = 0
+grav = 0.1
+friction = 1.05
+r_w = 10
+r_h = 10
+jheight = 3.8
+x_accel = 0.2
+r_x = 0.01 * Math.Round(100 * (wwidth / 3 - r_w / 2))
+r_y = 0.01 * Math.Round(100 * (hheight / 4 - r_h / 2))
+old_x = r_x
+old_y = r_y
+x_dead = r_x
+y_dead = r_y
+
+'Text varibles
+r_fill = "white"
+r_outline = "Black"
+r_thickness = 2
+text_color = "black"
+text_thickness = 1
+font = "Tahoma"
+game_title = "Boing ball"
+
+'Fps, timer, score
+fps = 100
+delay = (1 / fps) * 1000
+time_elapsed = 0
+total_time_elapsed = 0
+score = 0
+
+'Misc.
+song_legnth = 160000
+
+max_zoom = 1.5
+zoom_x = 0
+zoom_y = 0
+r_zoom = 1
+blood_zoom = 1
+
+'Danger defaults
+danger_distances[1] = 0
+danger_speed_original = 2
+danger_speed = danger_speed_original
+danger_size = 40
+danger_amount = 10
+danger_being_used = 2
+danger_timing_original = 13
+danger_timing = danger_timing_original
+danger_time_to_max = (danger_amount * danger_timing_original) + danger_timing_original
+danger_max_speed_increase = 4
+'======================================================================
+
+'Create objects and hide them away until use
+
+'Create square
+GraphicsWindow.PenColor = r_outline
+GraphicsWindow.PenWidth = r_thickness
+GraphicsWindow.BrushColor = r_fill
+r = Shapes.AddRectangle(r_w, r_h)
+Shapes.Move(r, r_x, r_y)
+Shapes.SetOpacity(r, 0)
+
+'Create Ghost
+ghost_r = Shapes.AddRectangle(r_w, r_h)
+Shapes.Move(ghost_r, r_x, r_y)
+Shapes.SetOpacity(ghost_r, 0)
+
+'Creates enemies
+For danger_number = 1 To danger_amount
+  danger_sprite[danger_number] = Shapes.AddImage(dangerpic) 'Adds the image under name stored in the array
+  danger_x[danger_number] = 0 - danger_size 'Sets the starting x of the image to off screen, essentially "storing" it away until we want to use it
+  danger_y[danger_number] = 0 - danger_size 'Sets the starting y of the image to off screen, essentially "storing" it away until we want to use it
+  Shapes.Move(danger_sprite[danger_number], danger_x[danger_number], danger_y[danger_number]) 'Actually put the shape there
+EndFor
+
+'Spawns in dangers, if used
+For danger_number = 0 To danger_being_used
+    danger_y[danger_number] = 0 - danger_size * 4 - Math.GetRandomNumber(danger_speed_original * fps)
+    If danger_number = 1 Then
+      danger_y[danger_number] = 0 - danger_size
+    EndIf
+    danger_x[danger_number] = Math.GetRandomNumber(wwidth - danger_size)
+    Shapes.Move(danger_sprite[danger_number], danger_x[danger_number], danger_y[danger_number])
+EndFor
+
+blood = Shapes.AddImage(bloodpic)
+Shapes.Move(blood, -40, -40)
+
+'Creates text, scores, and other shapes
+dead_text = Shapes.AddImage(text_pic)
+Shapes.Move(dead_text, -100, -100)
+Shapes.SetOpacity(dead_text, 100)
+
+GraphicsWindow.BrushColor = text_color
+GraphicsWindow.FontSize = 30
+score_text = Shapes.AddText("Your score:")
+Shapes.SetOpacity(score_text, 0)
+GraphicsWindow.FontSize = 15
+reset_text = Shapes.AddText("Press r or click to play again! Hit escape to quit.")
+Shapes.SetOpacity(reset_text, 0)
+
+'If it's the first time playing, then start the music and open the menu
+If first_time = 1 Then
+  'Music
+  PlayMusic()
+
+  'Main menu
+  Menu()
+EndIf
+
+'Load game world
+GraphicsWindow.DrawResizedImage(background2, 0, 0, wwidth, hheight)
+Shapes.SetOpacity(ghost_r, 20)
+Shapes.SetOpacity(r, 100)
+
+'======================================================================
+'Start loop
+While "true"
+  'Save ghost data
+  old_x = r_x
+  old_y = r_y
+  ghost_x = (old_x + r_x) / 2
+  ghost_y = (old_y + r_y) / 2
+
+  'Actually move
+  r_y = r_y - yv
+  r_x = r_x + xv
+  Shapes.Move(r, r_x, r_y)
+  Shapes.Move(ghost_r, ghost_x, ghost_y)
+
+  'Apply gravity and friction
+  If r_y <= GraphicsWindow.Height - 10 - r_h / 16 Then
+    yv = yv - grav
+  EndIf
+  xv = xv / friction
+  If Math.Abs(xv) <= 0.01 Then
+    xv = 0
+    EndIf
+
+  'Round numbers
+  yv = 0.01 * Math.Round(100 * yv)
+  xv = 0.001 * Math.Round(1000 * xv)
+
+  'Bounce off floor
+  If r_y >= GraphicsWindow.Height - 10 - r_h / 10 Then
+      yv = (yv * -1) / 2 + 0.4
+      If yv <= grav * 10 Then
+        yv = 0
+        EndIf
+    While r_y >= GraphicsWindow.Height - 10
+      r_y = r_y - 1
+    EndWhile
+  EndIf
+
+  If r_y >= GraphicsWindow.Height - 10 - r_h / 10 And yv <= grav * 15 And yv >= 0 Then
+    yv = 0
+  EndIf
+
+  'Bounce off ceiling
+  If r_y <= 0 Then
+    yv = yv * -0.5
+    While r_y <= 0
+      r_y = r_y + 1
+    EndWhile
+  EndIf
+
+  'Bounce off walls
+  If r_x >= GraphicsWindow.Width - r_w Then
+    xv = x_accel * -10
+    While r_x >= GraphicsWindow.Width - r_w
+      r_x = r_x - 1
+    EndWhile
+  EndIf
+
+  If r_x <= 0 Then
+    xv = x_accel * 10
+    While r_x <= 0
+      r_x = r_x + 1
+    EndWhile
+  EndIf
+
+  'User commands
+  If Mouse.IsLeftButtonDown And r_y >= GraphicsWindow.Height - 10 - r_h / 10 Then
+    yv = yv + jheight
+  EndIf
+
+  If Mouse.IsRightButtonDown Then
+    If GraphicsWindow.MouseX >= r_x Then
+      xv = xv + x_accel
+    Else
+      xv = xv - x_accel
+    EndIf
+  EndIf
+
+  'Restart check
+  If (key_last = "R" And dead = 4) or (Mouse.IsLeftButtonDown And dead = 4) Then
+    If total_time_elapsed >= 0.5 and dead <> 0 Then
+      Reset()
+      'Note that the command to go to the label "Beginning" CANNOT be within a sub.
+      Goto Beginning
+    Else
+      key_last = ""
+    EndIf
+  EndIf
+
+  'Check if touching any danger, and check if dead
+  Sense()
+  Died()
+
+  'Controls the danger shapes: the for goes through each IN-USE shape until it reaches the limit
+  For danger_number = 1 To danger_being_used
+    'Move downwards
+    danger_y[danger_number] = danger_y[danger_number] + danger_speed
+
+    'Sense if below the screen
+    If danger_y[danger_number] >= GraphicsWindow.Height Then
+      danger_y[danger_number] = 0 - danger_size - Math.GetRandomNumber(danger_speed * 100)
+      danger_x[danger_number] = Math.GetRandomNumber(GraphicsWindow.Width - danger_size)
+      score = score + 1
+    EndIf
+
+    'Actually move the shape
+    Shapes.Move(danger_sprite[danger_number], danger_x[danger_number], danger_y[danger_number])
+  EndFor
+
+  'Control timer
+  If dead = 0 Then
+    Timing()
+  EndIf
+
+  'End loop
+  Program.Delay(delay)
+  CheckResolution()
+  If draw_varibles = 0 Then
+    DrawVars()
+  EndIf
+  Close()
+
+EndWhile
+'======================================================================
+
+'======================================================================
+'Console
+Sub DrawVars
+  If draw_varibles = 1 Then
+
+    TextWindow.Clear()
+
+    'Ones to hide: Change 0 to 1 to bring them back
+    If 0 = 1 Then
+      round_xv = 0.01 * Math.Round(100 * xv)
+      TextWindow.WriteLine("yv: " + yv)
+      TextWindow.WriteLine("xv: " + round_xv)
+      TextWindow.CursorTop = TextWindow.CursorTop + 1
+
+      TextWindow.WriteLine("x: " + r_x)
+      TextWindow.WriteLine("y: " + r_y)
+      TextWindow.CursorTop = TextWindow.CursorTop + 1
+
+      TextWindow.WriteLine("first_time: " + first_time)
+      TextWindow.WriteLine("menu: " + (1 - clicked))
+      TextWindow.CursorTop = TextWindow.CursorTop + 1
+
+      TextWindow.WriteLine("key_last: " + key_last)
+      TextWindow.CursorTop = TextWindow.CursorTop + 1
+
+      TextWindow.WriteLine("Mouse.IsLeftButtonDown: " + Mouse.IsLeftButtonDown)
+      TextWindow.WriteLine("Mouse.IsRightButtonDown: " + Mouse.IsRightButtonDown)
+
+      dist_moved = Math.SquareRoot((Math.Power((old_x - r_x), 2)) + (Math.Power((old_y - r_y), 2)))
+      TextWindow.CursorTop = TextWindow.CursorTop + 1
+      TextWindow.WriteLine("dist_moved: " + dist_moved)
+
+      TextWindow.CursorTop = TextWindow.CursorTop + 1
+      TextWindow.WriteLine("zoom_x: " + 0.1 * Math.Round(10 * zoom_x))
+      TextWindow.WriteLine("zoom_y: " + 0.1 * Math.Round(10 * zoom_y))
+    EndIf
+
+    TextWindow.WriteLine("")
+    TextWindow.CursorLeft = 3
+    TextWindow.WriteLine("Total time elapsed: " + total_time_elapsed)
+    TextWindow.CursorLeft = 3
+
+    If danger_being_used <> danger_amount Then
+      TextWindow.WriteLine("Timer: " + time_elapsed)
+      TextWindow.CursorLeft = 3
+      TextWindow.WriteLine("danger_being_used: " + danger_being_used)
+      TextWindow.CursorLeft = 3
+      TextWindow.WriteLine("danger_timing: " + danger_timing)
+    Else
+      TextWindow.WriteLine("dangers maxed")
+    EndIf
+
+    TextWindow.CursorLeft = 3
+    TextWindow.WriteLine("danger_speed: " + danger_speed)
+    TextWindow.CursorLeft = 3
+    TextWindow.WriteLine("danger_time_to_max: " + danger_time_to_max)
+
+    TextWindow.CursorTop = TextWindow.CursorTop + 1
+    For i = 1 To Array.GetItemCount(danger_distances)
+      TextWindow.CursorLeft = 3
+      TextWindow.WriteLine("[" + i + "] dist_to_danger: " + Math.Round(danger_distances[i]))
+    EndFor
+
+    TextWindow.CursorTop = TextWindow.CursorTop + 1
+    TextWindow.CursorLeft = 3
+    TextWindow.WriteLine("sum of radii: " + ((danger_size / 2) + (r_w / 2)))
+    TextWindow.CursorTop = TextWindow.CursorTop + 1
+
+    TextWindow.WriteLine("Program Directory: " + app_directory)
+    TextWindow.WriteLine("Files Directory: " + file_directory)
+
+  EndIf
+EndSub
+'======================================================================
+
+'======================================================================
+'Main menu
+Sub Menu
+  'Load image
+  GraphicsWindow.DrawResizedImage(background, 0, 0, wwidth, hheight)
+
+  'Finally show game once everything is set
+  GraphicsWindow.Show()
+
+  'Logo and instructions
+  clicked = 0
+
+  GraphicsWindow.BrushColor = "white"
+  GraphicsWindow.PenColor = "white"
+  GraphicsWindow.PenWidth = text_thickness
+  GraphicsWindow.FontName = font
+  GraphicsWindow.FontSize = 47
+  GraphicsWindow.DrawText(25, 7, game_title)
+  GraphicsWindow.BrushColor = text_color
+  GraphicsWindow.PenColor = text_color
+  GraphicsWindow.PenWidth = text_thickness
+  GraphicsWindow.FontName = font
+  GraphicsWindow.FontSize = 45
+  GraphicsWindow.DrawText(25, 5, game_title)
+
+  GraphicsWindow.BrushColor = "white"
+  GraphicsWindow.PenColor = "white"
+  GraphicsWindow.PenWidth = text_thickness
+  GraphicsWindow.FontName = font
+  GraphicsWindow.FontSize = 25
+  GraphicsWindow.DrawText(25, 107, "Click to begin!")
+  GraphicsWindow.BrushColor = text_color
+  GraphicsWindow.PenColor = text_color
+  GraphicsWindow.PenWidth = text_thickness
+  GraphicsWindow.FontName = font
+  GraphicsWindow.FontSize = 25
+  GraphicsWindow.DrawText(25, 105, "Click to begin!")
+
+  'Menu loop: go until clicked
+  While clicked = 0
+    If Mouse.IsLeftButtonDown Then
+      clicked = 1
+    EndIf
+    Program.Delay(delay)
+    CheckResolution()
+    Close()
+    DrawVars()
+  EndWhile
+EndSub
+'======================================================================
+
+'Song
+Sub PlayMusic
+  Sound.Play(song)
+EndSub
+
+'Keyboard input
+Sub Keys
+  key_last = GraphicsWindow.LastKey
+EndSub
+
+'Close program
+Sub Close
+  If key_last = "Escape" Then
+    Program.End()
+  EndIf
+EndSub
+
+'Clear screen
+Sub Fakeclear
+  GraphicsWindow.BrushColor = GraphicsWindow.BackgroundColor
+  GraphicsWindow.FillRectangle(0, 0, GraphicsWindow.width, GraphicsWindow.height)
+EndSub
+
+'Check resolution: make sure that the person hasn't changed window size
+Sub CheckResolution
+  If GraphicsWindow.Height <> hheight Or GraphicsWindow.Width <> wwidth Then
+    GraphicsWindow.ShowMessage("ERROR: Please do not change window size!", "Error")
+    GraphicsWindow.Height = hheight
+    GraphicsWindow.Width = wwidth
+    If GraphicsWindow.Height <> hheight Or GraphicsWindow.Width <> wwidth Then
+      GraphicsWindow.ShowMessage("ERROR: Fullscreen error. The program will now close.", "Error")
+      Program.End()
+    EndIf
+  EndIf
+EndSub
+
+'Timer: how long has game been going, how long to wait between adding new dangers, etc.
+Sub Timing
+  time_elapsed = time_elapsed + (1 / fps)
+  total_time_elapsed = total_time_elapsed + (1 / fps)
+
+  'If timer is beyond certain point, add more dangers to the screen
+  If time_elapsed > danger_timing and danger_being_used < danger_amount Then
+  time_elapsed = 0
+  danger_being_used = danger_being_used + 1
+
+  'Generate random number to vary up time between dangers
+  random_min = -4
+  random_max = 4
+  random_interval = 0.1
+  random_number = (random_min + (Math.GetRandomNumber(1 + (random_max - random_min) / random_interval) - 1) * random_interval)
+
+  danger_timing = danger_timing_original + random_number
+  EndIf
+
+  'Increase speed
+  danger_speed = danger_speed_original + (total_time_elapsed / danger_time_to_max) * danger_max_speed_increase
+
+  If danger_speed > danger_speed_original + danger_max_speed_increase Then
+    danger_speed = danger_speed_original + danger_max_speed_increase
+  EndIf
+EndSub
+
+'Calculate hitbox: If distance between the center of the danger and the center of the player is LESS than the sum of their radii, then they're touching
+Sub Sense
+  For i = 1 To danger_being_used
+    dist_to_danger = Math.SquareRoot((Math.Power((r_x - (danger_x[i] + danger_size / 2)), 2)) + (Math.Power((r_y - (danger_y[i] + danger_size / 2)), 2)))
+    danger_distances[i] = dist_to_danger
+    If dist_to_danger <= (danger_size / 2) + (r_w / 2) Then
+      dead = 1
+    EndIf
+  EndFor
+EndSub
+
+'Go through dead sequence and display scores after
+Sub Died
+  If dead = 1 Then
+    xv = 0
+    yv = 0
+    x_dead = r_x
+    y_dead = r_y
+    grav = 0
+    dead = 2
+    danger_speed = danger_speed_original * -0.5
+    Shapes.SetOpacity(ghost_r, 0)
+    Shapes.Move(blood, x_dead - 13, y_dead - 13)
+  EndIf
+  If dead = 2 Then
+    r_x = x_dead
+    r_y = y_dead
+    xv = 0
+    yv = 0
+    Shapes.Zoom(r, r_zoom, r_zoom)
+    Shapes.Zoom(blood, blood_zoom, blood_zoom)
+    r_zoom = r_zoom + 0.1
+    blood_zoom = blood_zoom + 0.05
+    Shapes.SetOpacity(r, Shapes.GetOpacity(r) - 1)
+    Shapes.SetOpacity(blood, Shapes.GetOpacity(blood) - 1)
+    For i = 1 To danger_amount
+      Shapes.SetOpacity(danger_sprite[i], Shapes.GetOpacity(danger_sprite[i]) - 1)
+    EndFor
+    If Shapes.GetOpacity(r) <= 0 Then
+      dead = 3
+    EndIf
+  EndIf
+  If dead = 3 Then
+    Shapes.Move(dead_text, 55, 0)
+    Shapes.SetOpacity(dead_text, Shapes.GetOpacity(dead_text) + 2.5)
+    If Shapes.GetOpacity(dead_text) >= 100 Then
+      If Math.Round(total_time_elapsed) <> 1 Then
+        Shapes.SetText(score_text, "You lasted " + Math.Round(total_time_elapsed) + " seconds.")
+      Else
+        Shapes.SetText(score_text, "You lasted " + Math.Round(total_time_elapsed) + " second.")
+      EndIf
+      Shapes.SetOpacity(score_text, Shapes.GetOpacity(score_text) + 2.5)
+      Shapes.Move(score_text, 60, 80)
+
+      Shapes.Move(reset_text, 60, 120)
+      Shapes.SetOpacity(reset_text, Shapes.GetOpacity(reset_text) + 2.5)
+      If Shapes.GetOpacity(reset_text) >= 100 Then
+        dead = 4
+      EndIf
+    EndIf
+  EndIf
+EndSub
+
+'Reset the game: erase all shapes and begin again
+Sub Reset
+  For fade = 0 To 100
+    Shapes.SetOpacity(dead_text, 100 - fade)
+    Shapes.SetOpacity(score_text, 100 - fade)
+    Shapes.SetOpacity(reset_text, 100 - fade)
+    Program.Delay(delay / 4)
+    CheckResolution()
+    Close()
+    DrawVars()
+  EndFor
+
+  Shapes.Remove(r)
+  Shapes.Remove(blood)
+  Shapes.Remove(ghost_r)
+  Shapes.Remove(dead_text)
+  Shapes.Remove(score_text)
+  For i = 1 To danger_amount
+    Shapes.Remove(danger_sprite[i])
+  EndFor
+  first_time = 0
+  GraphicsWindow.Clear()
+  key_last = ""
+EndSub
+
+'======================================================================
+'Old / Misc. Code
+
+'Direction-oriented ghost
+'Sub Ghost
+'  zoom = 0.5 + dist_moved / 8
+'  zoom_x = zoom + Math.Abs(xv) / 8
+'  zoom_y = zoom + Math.Abs(yv) / 8
+'
+'  If zoom_x > max_zoom Then
+'    zoom_x = max_zoom
+'  EndIf
+'
+'  If zoom_y > max_zoom Then
+'    zoom_y = max_zoom
+'  EndIf
+'
+'  Shapes.Zoom(ghost_r, zoom_x, zoom_y)
+'EndSub
+'======================================================================
